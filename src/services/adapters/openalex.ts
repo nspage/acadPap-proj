@@ -17,7 +17,11 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
   
   // We want to fetch papers with full text available or OA.
   // We prioritize those that have an OA URL or primary location PDF.
-  const filterQuery = `&filter=has_fulltext:true,is_oa:true`;
+  let filterQuery = `&filter=has_fulltext:true,is_oa:true`;
+  if (config.params.openAlexFilter) {
+    filterQuery = `&filter=has_fulltext:true,is_oa:true,${config.params.openAlexFilter}`;
+  }
+  
   const url = `https://api.openalex.org/works?per_page=15&page=${page}${filterQuery}${searchQuery}&sort=publication_year:desc`;
 
   const res = await fetch(url, {

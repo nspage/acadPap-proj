@@ -39,6 +39,7 @@ export interface RepositoryConfig {
   category: string;
   params: {
     queryKeywords?: string;
+    openAlexFilter?: string;
   };
 }
 

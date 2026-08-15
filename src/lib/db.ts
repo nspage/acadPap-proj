@@ -19,28 +19,44 @@ db.version(2).stores({
 
 export const DEFAULT_SOURCES: RepositoryConfig[] = [
   {
-    id: 'openalex-cs-ai',
-    name: 'OpenAlex (AI & ML)',
+    id: 'ch-all-biz',
+    name: 'All Business & Tech',
     type: 'openalex',
     enabled: true,
-    category: 'Computer Science',
-    params: { queryKeywords: 'artificial intelligence OR machine learning' }
+    category: 'Business & Tech',
+    params: { openAlexFilter: 'topics.id:t10003|t10058|t10145|t10344|t10609|t11161|t12128|t10763|t11715|t11891|t11995|t13053|t13370|t13706|t14182' }
   },
   {
-    id: 'openalex-biology',
-    name: 'OpenAlex (Biology)',
+    id: 'ch-innovation',
+    name: 'Innovation & Enterprise',
     type: 'openalex',
-    enabled: true,
-    category: 'Biology',
-    params: { queryKeywords: 'computational biology OR bioinformatics' }
+    enabled: false,
+    category: 'Innovation',
+    params: { openAlexFilter: 'topics.id:t10003|t10058|t13053' }
   },
   {
-    id: 'openalex-physics',
-    name: 'OpenAlex (Physics)',
+    id: 'ch-marketing',
+    name: 'Marketing & Consumer',
     type: 'openalex',
-    enabled: true,
-    category: 'Physics',
-    params: { queryKeywords: 'quantum computing OR astrophysics' }
+    enabled: false,
+    category: 'Marketing',
+    params: { openAlexFilter: 'topics.id:t10145|t10609|t11161' }
+  },
+  {
+    id: 'ch-ai-data',
+    name: 'AI, Data & FinTech',
+    type: 'openalex',
+    enabled: false,
+    category: 'AI & Data',
+    params: { openAlexFilter: 'topics.id:t11891|t11995|t12128|t10763' }
+  },
+  {
+    id: 'ch-management',
+    name: 'Management & Org',
+    type: 'openalex',
+    enabled: false,
+    category: 'Management',
+    params: { openAlexFilter: 'topics.id:t10344|t13706|t11715|t13370' }
   }
 ];
 
