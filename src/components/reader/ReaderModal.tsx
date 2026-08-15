@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { PaperCard, PaperNote, TextSelectionContext } from '../../types';
 import { PDFViewer } from './PDFViewer';
+import { ReaderModeView } from './ReaderModeView';
 import { db } from '../../lib/db';
 import { fetchDictionaryDefinition, fetchContextualExplanation } from '../../services/explainer';
-import { X, Sparkles, Book, Save, ExternalLink, Quote, Lightbulb, FileText } from 'lucide-react';
+import { X, Sparkles, Book, Save, ExternalLink, Quote, Lightbulb, FileText, Eye } from 'lucide-react';
 
 interface ReaderModalProps {
   paper: PaperCard | null;
@@ -12,7 +13,7 @@ interface ReaderModalProps {
 }
 
 export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
-  const [activeTab, setActiveTab] = useState<'pdf' | 'notes'>('pdf');
+  const [activeTab, setActiveTab] = useState<'reader' | 'pdf' | 'notes'>('reader');
   const [note, setNote] = useState<PaperNote>({
     id: crypto.randomUUID(),
     paperId: paper?.id || '',
@@ -122,20 +123,31 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
             {/* View Tabs */}
             <div className="flex p-1 bg-slate-800/80 rounded-xl border border-slate-700/60">
               <button
-                onClick={() => setActiveTab('pdf')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                  activeTab === 'pdf' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                onClick={() => setActiveTab('reader')}
+                className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                  activeTab === 'reader' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                PDF Reader
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Reader Mode</span>
+              </button>
+              <button
+                onClick={() => setActiveTab('pdf')}
+                className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                  activeTab === 'pdf' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Original PDF</span>
               </button>
               <button
                 onClick={() => setActiveTab('notes')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                  activeTab === 'notes' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+                className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
+                  activeTab === 'notes' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Notes & Synthesis
+                <FileText className="w-3.5 h-3.5" />
+                <span>Notes</span>
               </button>
             </div>
 
@@ -150,7 +162,15 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
 
         {/* Main Body */}
         <div className="flex-1 overflow-hidden relative flex">
-          {activeTab === 'pdf' ? (
+          {activeTab === 'reader' ? (
+            <div className="w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
+              <ReaderModeView
+                paper={paper}
+                onTextSelected={handleTextSelected}
+                onSwitchToOriginalPdf={() => setActiveTab('pdf')}
+              />
+            </div>
+          ) : activeTab === 'pdf' ? (
             <div className="w-full h-full p-4 overflow-y-auto flex flex-col items-center">
               {paper.pdfUrl ? (
                 <PDFViewer paperId={paper.id} url={paper.pdfUrl} onTextSelected={handleTextSelected} />
