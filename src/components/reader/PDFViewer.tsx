@@ -200,6 +200,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
           </div>
         ) : (
           <Document
+            key={`${paperId}-doc`}
             file={{ data: pdfData }}
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
             loading={<div className="p-12 text-slate-400 text-sm font-mono animate-pulse">Parsing PDF document pages...</div>}
@@ -223,6 +224,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
             }
           >
             <Page
+              key={`${paperId}-page-${currentPage}`}
               pageNumber={currentPage}
               width={Math.min(window.innerWidth - 48, 750)}
               className="shadow-2xl rounded-lg overflow-hidden"

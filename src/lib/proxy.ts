@@ -4,13 +4,6 @@
  * In production, Edge Function / Worker strips CORS and pipes raw headers.
  */
 export async function fetchWithCORSProxy(targetUrl: string, init?: RequestInit): Promise<Response> {
-  try {
-    const directRes = await fetch(targetUrl, init);
-    if (directRes.ok) return directRes;
-  } catch {
-    // Direct call failed due to CORS restriction, fallback to Edge Proxy
-  }
-
   const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
   return fetch(proxyUrl, init);
 }
