@@ -13,6 +13,7 @@ interface SwipeDeckProps {
 
 export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckProps) {
   const [deck, setDeck] = useState<PaperCard[]>([]);
+  const [swipedDir, setSwipedDir] = useState<'left' | 'right' | null>(null);
   const x = useMotionValue(0);
 
   // Motion physics calculations for swipe gestures
@@ -22,18 +23,27 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
 
   useEffect(() => {
     setDeck(papers);
+    x.set(0);
+    setSwipedDir(null);
   }, [papers]);
 
   const activeCard = deck[0];
 
+  useEffect(() => {
+    x.set(0);
+    setSwipedDir(null);
+  }, [activeCard?.id]);
+
   const handleSwipeRight = () => {
     if (!activeCard) return;
+    setSwipedDir('right');
     onSave(activeCard);
     setDeck((prev) => prev.slice(1));
   };
 
   const handleSwipeLeft = () => {
     if (!activeCard) return;
+    setSwipedDir('left');
     onDiscard(activeCard);
     setDeck((prev) => prev.slice(1));
   };
@@ -57,7 +67,7 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [deck]);
+  }, [activeCard]);
 
   if (deck.length === 0) {
     return (
@@ -84,7 +94,7 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
     <div className="flex flex-col items-center w-full max-w-md mx-auto px-4 py-4">
       {/* Card Stack Container */}
       <div className="relative w-full h-[520px] flex items-center justify-center">
-        <AnimatePresence>
+        <AnimatePresence mode="popLayout">
           {deck.slice(0, 3).map((paper, index) => {
             const isTop = index === 0;
             return (
@@ -97,16 +107,25 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
                 }}
                 drag={isTop ? 'x' : false}
                 dragConstraints={{ left: 0, right: 0 }}
+                dragSnapToOrigin={true}
                 onDragEnd={(_, info) => {
                   if (info.offset.x > 100) {
                     handleSwipeRight();
                   } else if (info.offset.x < -100) {
                     handleSwipeLeft();
+                  } else {
+                    x.set(0);
                   }
                 }}
                 initial={{ scale: 1 - index * 0.05, y: index * 12, opacity: 1 - index * 0.2 }}
                 animate={{ scale: 1 - index * 0.05, y: index * 12, opacity: 1 - index * 0.2 }}
-                exit={{ x: x.get() < 0 ? -300 : 300, opacity: 0, transition: { duration: 0.25 } }}
+                exit={
+                  swipedDir === 'right'
+                    ? { x: 350, opacity: 0, transition: { duration: 0.25 } }
+                    : swipedDir === 'left'
+                    ? { x: -350, opacity: 0, transition: { duration: 0.25 } }
+                    : { scale: 0.9, opacity: 0, transition: { duration: 0.2 } }
+                }
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 className="absolute top-0 left-0 w-full h-full cursor-grab active:cursor-grabbing"
               >

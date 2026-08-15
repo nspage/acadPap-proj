@@ -26,14 +26,11 @@ export function App() {
 
   const sources = dbSources.length > 0 ? dbSources : DEFAULT_SOURCES;
 
-  useEffect(() => {
-    initializeDatabase();
-  }, []);
-
   const loadFeed = async () => {
     setIsLoading(true);
     try {
-      const activeSources = sources.filter((s) => s.enabled);
+      const currentSources = (await db.sources.toArray());
+      const activeSources = (currentSources.length > 0 ? currentSources : DEFAULT_SOURCES).filter((s) => s.enabled);
       const fetched = await fetchAllEnabledPapers(activeSources);
 
       // Exclude already discarded or saved papers
@@ -51,10 +48,14 @@ export function App() {
   };
 
   useEffect(() => {
-    if (sources.length > 0) {
-      loadFeed();
-    }
-  }, [sources.map((s) => `${s.id}:${s.enabled}`).join(',')]);
+    let active = true;
+    initializeDatabase().then(() => {
+      if (active) {
+        loadFeed();
+      }
+    });
+    return () => { active = false; };
+  }, []);
 
   const handleSavePaper = async (paper: PaperCard) => {
     try {

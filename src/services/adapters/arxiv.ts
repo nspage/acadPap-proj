@@ -24,7 +24,7 @@ export async function fetchArxivPapers(config: RepositoryConfig, page = 1): Prom
       arxivId = arxivId.split('/').pop() || arxivId;
     }
 
-    const pdfUrl = `https://export.arxiv.org/pdf/${arxivId}.pdf`;
+    const pdfUrl = `https://arxiv.org/pdf/${arxivId}.pdf`;
 
     const authors = Array.isArray(entry.author)
       ? entry.author.map((a: any) => a.name)
