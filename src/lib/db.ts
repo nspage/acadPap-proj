@@ -60,6 +60,20 @@ export const DEFAULT_SOURCES: RepositoryConfig[] = [
   }
 ];
 
+db.version(3).stores({
+  savedPapers: 'id, sourceType, publishedDate',
+  notes: 'id, paperId, updatedAt',
+  sources: 'id, type, enabled',
+  discardedIds: 'id, discardedAt',
+  pdfCache: 'paperId, cachedAt'
+}).upgrade(async (tx) => {
+  // Purge old sources (arxiv, zenodo, osf) and insert new openalex channels
+  await tx.table('sources').clear();
+  await tx.table('sources').bulkAdd(DEFAULT_SOURCES);
+});
+
+
+
 export async function initializeDatabase() {
   const count = await db.sources.count();
   if (count === 0) {
