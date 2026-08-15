@@ -7,8 +7,9 @@ import { SwipeDeck } from './components/deck/SwipeDeck';
 import { JournalView } from './components/journal/JournalView';
 import { ReaderModal } from './components/reader/ReaderModal';
 import { SettingsModal } from './components/settings/SettingsModal';
+import { RabbitHoleExplorer } from './components/deck/RabbitHoleExplorer';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Compass } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'discover' | 'journal'>('discover');
@@ -119,6 +120,37 @@ export function App() {
     loadFeed();
   };
 
+  const [isExplorerOpen, setIsExplorerOpen] = useState(false);
+
+  const handleSelectRabbitHole = async (topicId: string, topicName: string) => {
+    setIsExplorerOpen(false);
+    
+    const sourceId = `openalex-topic-${topicId}`;
+    
+    await db.transaction('rw', db.sources, async () => {
+      const all = await db.sources.toArray();
+      for (const s of all) {
+        await db.sources.update(s.id, { enabled: false });
+      }
+      
+      const exists = await db.sources.get(sourceId);
+      if (exists) {
+        await db.sources.update(sourceId, { enabled: true });
+      } else {
+        await db.sources.put({
+          id: sourceId,
+          type: 'openalex',
+          name: topicName,
+          category: topicName,
+          enabled: true,
+          params: { openAlexFilter: `topics.id:${topicId}` }
+        });
+      }
+    });
+    
+    loadFeed();
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200">
       {/* Header Bar */}
@@ -138,21 +170,21 @@ export function App() {
       <main className="flex-1 flex flex-col items-center justify-start p-4 w-full">
         {activeTab === 'discover' ? (
           <div className="w-full flex flex-col items-center h-full max-w-md mx-auto">
-            {/* Channel Switcher */}
-            <div className="w-full flex space-x-2 overflow-x-auto pb-4 mb-2 scrollbar-hide px-2">
-              {sources.map((source) => (
-                <button
-                  key={source.id}
-                  onClick={() => handleSelectChannel(source.id)}
-                  className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-all flex-shrink-0 ${
-                    source.enabled
-                      ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25'
-                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-slate-200'
-                  }`}
-                >
-                  {source.name}
-                </button>
-              ))}
+            {/* Explorer Trigger */}
+            <div className="w-full flex space-x-2 pb-4 mb-2 px-2 items-center justify-between">
+              <div className="flex flex-col space-y-0.5">
+                <span className="text-xs text-slate-400 font-medium">Currently Exploring</span>
+                <span className="text-sm font-bold text-indigo-300">
+                  {sources.find(s => s.enabled)?.name || 'Default Feed'}
+                </span>
+              </div>
+              <button
+                onClick={() => setIsExplorerOpen(true)}
+                className="flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-full shadow-lg shadow-indigo-500/25 transition-all"
+              >
+                <Compass className="w-4 h-4" />
+                <span>Explore Rabbit Hole</span>
+              </button>
             </div>
 
             {isLoading ? (
@@ -199,6 +231,14 @@ export function App() {
           onToggleSource={handleToggleSource}
           onResetDatabase={handleResetDatabase}
           onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+
+      {/* Rabbit Hole Explorer */}
+      {isExplorerOpen && (
+        <RabbitHoleExplorer
+          onSelectTopic={handleSelectRabbitHole}
+          onClose={() => setIsExplorerOpen(false)}
         />
       )}
     </div>
