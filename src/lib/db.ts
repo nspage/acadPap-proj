@@ -19,36 +19,28 @@ db.version(2).stores({
 
 export const DEFAULT_SOURCES: RepositoryConfig[] = [
   {
-    id: 'osf-socarxiv',
-    name: 'SocArXiv (Social Sciences)',
-    type: 'osf',
-    enabled: true,
-    category: 'Social Sciences',
-    params: { osfProviderSlug: 'socarxiv' }
-  },
-  {
-    id: 'osf-psyarxiv',
-    name: 'PsyArXiv (Psychology)',
-    type: 'osf',
-    enabled: true,
-    category: 'Psychology',
-    params: { osfProviderSlug: 'psyarxiv' }
-  },
-  {
-    id: 'arxiv-ai',
-    name: 'arXiv (AI & ML)',
-    type: 'arxiv',
+    id: 'openalex-cs-ai',
+    name: 'OpenAlex (AI & ML)',
+    type: 'openalex',
     enabled: true,
     category: 'Computer Science',
-    params: { arxivCategory: 'cs.AI' }
+    params: { queryKeywords: 'artificial intelligence OR machine learning' }
   },
   {
-    id: 'zenodo-open',
-    name: 'Zenodo (Open Science)',
-    type: 'zenodo',
+    id: 'openalex-biology',
+    name: 'OpenAlex (Biology)',
+    type: 'openalex',
     enabled: true,
-    category: 'Interdisciplinary',
-    params: { queryKeywords: 'open science' }
+    category: 'Biology',
+    params: { queryKeywords: 'computational biology OR bioinformatics' }
+  },
+  {
+    id: 'openalex-physics',
+    name: 'OpenAlex (Physics)',
+    type: 'openalex',
+    enabled: true,
+    category: 'Physics',
+    params: { queryKeywords: 'quantum computing OR astrophysics' }
   }
 ];
 

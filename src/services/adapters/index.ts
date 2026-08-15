@@ -1,18 +1,12 @@
 import { PaperCard, RepositoryConfig } from '../../types';
-import { fetchOSFPapers } from './osf';
-import { fetchArxivPapers } from './arxiv';
-import { fetchZenodoPapers } from './zenodo';
+import { fetchOpenAlexPapers } from './openalex';
 
 export async function fetchPapersFromSource(config: RepositoryConfig, page = 1): Promise<PaperCard[]> {
   if (!config.enabled) return [];
   try {
     switch (config.type) {
-      case 'osf':
-        return await fetchOSFPapers(config, page);
-      case 'arxiv':
-        return await fetchArxivPapers(config, page);
-      case 'zenodo':
-        return await fetchZenodoPapers(config, page);
+      case 'openalex':
+        return await fetchOpenAlexPapers(config, page);
       default:
         console.warn(`Unsupported repository type: ${config.type}`);
         return [];

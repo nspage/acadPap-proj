@@ -1,8 +1,8 @@
-export type RepositoryType = 'osf' | 'zenodo' | 'arxiv' | 'figshare';
+export type RepositoryType = 'openalex';
 
 export interface PaperCard {
-  id: string;               // Unique: e.g. "osf:socarxiv:123", "arxiv:2401.001"
-  source: string;           // Display label (e.g. "SocArXiv", "arXiv (cs.AI)")
+  id: string;               // Unique: e.g. "openalex:W12345"
+  source: string;           // Display label (e.g. "OpenAlex (AI & ML)")
   sourceType: RepositoryType;
   title: string;
   abstract: string;
@@ -38,9 +38,7 @@ export interface RepositoryConfig {
   enabled: boolean;
   category: string;
   params: {
-    osfProviderSlug?: string; // 'socarxiv', 'psyarxiv', 'mediaarxiv', 'agrixiv'
     queryKeywords?: string;
-    arxivCategory?: string;   // 'cs.AI', 'physics.soc-ph', 'econ.GN'
   };
 }
 
