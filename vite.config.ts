@@ -16,19 +16,7 @@ export default defineConfig({
         description: 'Local-first paper discovery, PDF reader & AI learning journal',
         theme_color: '#0f172a',
         background_color: '#0f172a',
-        display: 'standalone',
-        icons: [
-          {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
-          }
-        ]
+        display: 'standalone'
       }
     }),
     {
@@ -48,7 +36,7 @@ export default defineConfig({
             // Fetch target URL server-side with full redirect following and Chrome User-Agent
             const upstreamRes = await fetch(targetUrl, {
               headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': 'AcademicSerendipityReader/1.0 (mailto:admin@example.com)',
                 'Accept': 'application/pdf, application/octet-stream, text/plain, */*'
               },
               redirect: 'follow'

@@ -1,5 +1,4 @@
 import { PaperCard, RepositoryConfig } from '../../types';
-import { fetchWithCORSProxy } from '../../lib/proxy';
 
 function cleanHtmlText(rawHtml: string): string {
   if (!rawHtml) return '';
@@ -33,7 +32,7 @@ export async function fetchZenodoPapers(config: RepositoryConfig, page = 1): Pro
   const query = encodeURIComponent(config.params.queryKeywords || 'open access');
   const url = `https://zenodo.org/api/records?q=${query}&size=15&page=${page}&sort=mostrecent`;
 
-  const res = await fetchWithCORSProxy(url);
+  const res = await fetch(url);
   if (!res.ok) throw new Error(`Zenodo error: ${res.status}`);
   const json = await res.json();
 

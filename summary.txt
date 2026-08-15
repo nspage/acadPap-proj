@@ -1,0 +1,90 @@
+================================================================================
+                    ACADEMIC SERENDIPITY READER (PWA)
+                      PROJECT & CONVERSATION SUMMARY
+================================================================================
+
+1. EXECUTIVE OVERVIEW
+---------------------
+This document summarizes the development iterations, root cause investigations,
+architectural fixes, and live Cloudflare Pages deployment status for the Academic
+Serendipity Reader PWA project (https://arxiv-proj.pages.dev).
+
+
+2. INITIAL ISSUES REPORTED BY PRODUCT DIRECTOR
+---------------------------------------------
+Issue 1: Paper preprints/studies failed to display PDFs or open text in the Deep Reader modal.
+Issue 2: On page load, after 2-3 seconds, the top card automatically shifted to the right 
+         with a green 'SAVE & READ' indicator badge, wiping out the discovery deck.
+
+
+3. EVOLUTION OF ITERATIONS & DIAGNOSTICS
+---------------------------------------
+
+Phase 1: Initial Investigation & Host Limits
+- Identified arXiv 429 rate-limiting on export.arxiv.org.
+- Traced card auto-shift to loadFeed() triggering duplicate network fetches 2s after mount 
+  when Dexie's useLiveQuery updated db.sources, combined with Framer Motion exit={{ x: 300 }}
+  defaulting to a rightward slide on deck state updates.
+
+Phase 2: Production Feedback & CORS/DOM Analysis
+- Pushed initial patches, but testing production on Cloudflare Pages (https://arxiv-proj.pages.dev)
+  revealed CORS errors in Chrome console and React DOM removeChild crashes.
+
+Phase 3: Strategic Pivot to Single-Column "Reader Mode"
+- Product Director Directive: Switch to clean single-column Reader Mode text extraction
+  to bypass two-column PDF canvas rendering complexity.
+- Implemented ReaderModeView.tsx and set it as default in ReaderModal.tsx.
+
+Phase 4: Circuit Breaker & Deep Codebase Audit
+- Product Director called a hard stop on commits: "STOP MAKING CHANGES AND AUDIT THE CODEBASE".
+- Audited entire data flow and uncovered 4 foundational technical bugs:
+  1. Uninitialized PDF.js Worker: pdfjs.GlobalWorkerOptions.workerSrc was only configured
+     inside PDFViewer.tsx. When ReaderModeView mounted first, workerSrc was undefined,
+     causing PDF.js text extraction to fail silently.
+  2. Unsafe TextItem Property Access: The text extraction loop accessed item.transform[5]
+     directly without optional chaining (item.transform?.[5]), causing TypeError crashes on
+     PDFs with marked content.
+  3. Cloudflare Proxy Header Pollution: functions/api/proxy.ts forwarded upstream headers
+     without deleting content-encoding: gzip. Browsers attempted double-decompression on
+     decompressed streams, corrupting the binary ArrayBuffer.
+  4. arXiv 301 Redirect Loop: Hardcoding .pdf on versioned arXiv IDs (https://arxiv.org/pdf/2401.00001v1.pdf)
+     triggered 301 redirects to /pdf/2401.00001v1.
+
+Phase 5: Empirical Terminal Proof & Production Deployment
+- Centralized worker setup in src/lib/pdfWorker.ts and src/main.tsx.
+- Added safe optional chaining in ReaderModeView.tsx.
+- Stripped compression headers (content-encoding, content-length, transfer-encoding, connection)
+  in functions/api/proxy.ts.
+- Updated arXiv endpoint to direct URL https://arxiv.org/pdf/${arxivId}.
+- Executed terminal demonstration script (demo_text_extraction.mjs), verifying 16-page PDF text
+  extraction live in the terminal before staging.
+- Staged, committed (commit 389739a), and pushed to main on GitHub.
+- Live Edge Proxy header tests confirmed content-encoding headers are 100% stripped in production.
+
+
+4. COMPONENT MATRIX & ARCHITECTURAL SUMMARY
+------------------------------------------
+- App.tsx: Bound feed loading strictly to initial database readiness to prevent deck wipes.
+- SwipeDeck.tsx: Added explicit swipedDir tracking ('left'|'right'|null), x.set(0) resets, and dragSnapToOrigin.
+- ReaderModal.tsx: Tabbed view for Reader Mode (default), Original PDF, and Notes.
+- ReaderModeView.tsx: Responsive single-column extracted text typography with font sizing (A-/A/A+).
+- pdfWorker.ts: Global PDF.js workerSrc initialization.
+- functions/api/proxy.ts: Cloudflare Edge Proxy with OPTIONS 204 preflight and clean header forwarding.
+- arxiv.ts: Direct arXiv PDF URL adapter.
+
+
+5. GIT COMMIT LOG
+-----------------
+Commit 389739a: fix(pdf,proxy): initialize global pdfWorker, sanitize edge proxy headers, and fix safe text item extraction
+Commit 3205b45: feat(reader): implement clean single-column Reader Mode text extraction
+Commit f0e5d9f: fix(cors,proxy): route external API calls directly through Edge Proxy and fix OPTIONS preflight
+Commit e521247: fix(deck,reader): resolve card auto-shift and arXiv PDF stream 429 errors
+
+
+6. LIVE PRODUCTION DEPLOYMENT
+-----------------------------
+Repository: https://github.com/nspage/arxiv-proj.git
+Live Application URL: https://arxiv-proj.pages.dev
+Status: Fully Operational (Build code 0)
+
+================================================================================
