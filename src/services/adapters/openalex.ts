@@ -72,7 +72,7 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
       abstract: reconstructAbstract(work.abstract_inverted_index),
       authors,
       publishedDate: work.publication_date || `${work.publication_year}-01-01`,
-      url: work.id,
+      url: work.primary_location?.landing_page_url || work.id,
       pdfUrl,
       tags
     };

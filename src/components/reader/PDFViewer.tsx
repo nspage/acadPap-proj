@@ -13,7 +13,8 @@ pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 interface PDFViewerProps {
   paperId: string;
-  url: string;
+  url: string; // The PDF URL
+  publisherUrl: string; // The landing page URL
   onTextSelected: (selection: TextSelectionContext) => void;
 }
 
@@ -24,7 +25,7 @@ function isValidPdfHeader(buffer: ArrayBuffer): boolean {
   return header.startsWith('%PDF');
 }
 
-export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
+export function PDFViewer({ paperId, url, publisherUrl, onTextSelected }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
@@ -190,7 +191,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
                 <span>Retry Stream</span>
               </button>
               <a
-                href={url}
+                href={publisherUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-colors"
@@ -213,7 +214,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
                 </div>
                 <div className="flex items-center justify-center space-x-3 pt-2">
                   <a
-                    href={url}
+                    href={publisherUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"

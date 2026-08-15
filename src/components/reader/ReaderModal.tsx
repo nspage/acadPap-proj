@@ -173,7 +173,7 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
           ) : activeTab === 'pdf' ? (
             <div className="w-full h-full p-4 overflow-y-auto flex flex-col items-center">
               {paper.pdfUrl ? (
-                <PDFViewer paperId={paper.id} url={paper.pdfUrl} onTextSelected={handleTextSelected} />
+                <PDFViewer paperId={paper.id} url={paper.pdfUrl} publisherUrl={paper.url} onTextSelected={handleTextSelected} />
               ) : (
                 <div className="m-auto text-center p-8 max-w-md bg-slate-950/60 rounded-2xl border border-slate-800">
                   <p className="text-sm text-slate-300 mb-4">
