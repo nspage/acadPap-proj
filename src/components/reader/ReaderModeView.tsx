@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { PaperCard, TextSelectionContext } from '../../types';
 import { getCachedPaperPdf } from '../../lib/db';
-import { pdfjs } from 'react-pdf';
+import { pdfjs } from '../../lib/pdfWorker';
 import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink } from 'lucide-react';
 
 interface ReaderModeViewProps {
@@ -65,14 +65,18 @@ export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }:
           let pageStr = '';
 
           for (const item of content.items as any[]) {
-            if (!item.str) continue;
-            if (lastY !== null && Math.abs(item.transform[5] - lastY) > 8) {
+            if (!item || typeof item.str !== 'string') continue;
+            const currentY = Array.isArray(item.transform) ? item.transform[5] : null;
+            
+            if (lastY !== null && currentY !== null && Math.abs(currentY - lastY) > 8) {
               pageStr += '\n\n';
             } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !item.str.startsWith(' ')) {
               pageStr += ' ';
             }
             pageStr += item.str;
-            lastY = item.transform[5];
+            if (currentY !== null) {
+              lastY = currentY;
+            }
           }
 
           const cleanedText = pageStr

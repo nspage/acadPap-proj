@@ -39,6 +39,12 @@ export async function onRequest(context: any) {
     }
 
     const responseHeaders = new Headers(upstreamRes.headers);
+    // Strip hop-by-hop and compression headers to prevent double-decompression corruption in browser
+    responseHeaders.delete('content-encoding');
+    responseHeaders.delete('content-length');
+    responseHeaders.delete('transfer-encoding');
+    responseHeaders.delete('connection');
+
     Object.entries(corsHeaders).forEach(([k, v]) => responseHeaders.set(k, v));
     if (!responseHeaders.has('Content-Type')) {
       responseHeaders.set('Content-Type', 'application/pdf');
