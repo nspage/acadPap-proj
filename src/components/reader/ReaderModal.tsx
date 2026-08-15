@@ -12,8 +12,12 @@ interface ReaderModalProps {
   onClose: () => void;
 }
 
+import { resolvePdfUrl } from '../../services/unpaywall';
+
 export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
   const [activeTab, setActiveTab] = useState<'reader' | 'pdf' | 'notes'>('reader');
+  const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
+  
   const [note, setNote] = useState<PaperNote>({
     id: crypto.randomUUID(),
     paperId: paper?.id || '',
@@ -33,6 +37,12 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
 
   useEffect(() => {
     if (!paper) return;
+    
+    // Attempt to resolve the best PDF URL via Unpaywall
+    resolvePdfUrl(paper).then(url => {
+      setResolvedPdfUrl(url || paper.pdfUrl || null);
+    });
+
     db.notes.where('paperId').equals(paper.id).first().then((existingNote) => {
       if (existingNote) {
         setNote(existingNote);
@@ -166,14 +176,15 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
             <div className="w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
               <ReaderModeView
                 paper={paper}
+                resolvedPdfUrl={resolvedPdfUrl}
                 onTextSelected={handleTextSelected}
                 onSwitchToOriginalPdf={() => setActiveTab('pdf')}
               />
             </div>
           ) : activeTab === 'pdf' ? (
             <div className="w-full h-full p-4 overflow-y-auto flex flex-col items-center">
-              {paper.pdfUrl ? (
-                <PDFViewer paperId={paper.id} url={paper.pdfUrl} publisherUrl={paper.url} onTextSelected={handleTextSelected} />
+              {resolvedPdfUrl ? (
+                <PDFViewer paperId={paper.id} url={resolvedPdfUrl} publisherUrl={paper.url} onTextSelected={handleTextSelected} />
               ) : (
                 <div className="m-auto text-center p-8 max-w-md bg-slate-950/60 rounded-2xl border border-slate-800">
                   <p className="text-sm text-slate-300 mb-4">

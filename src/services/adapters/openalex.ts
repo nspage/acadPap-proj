@@ -74,6 +74,7 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
       publishedDate: work.publication_date || `${work.publication_year}-01-01`,
       url: work.primary_location?.landing_page_url || work.id,
       pdfUrl,
+      doi: work.doi ? work.doi.replace('https://doi.org/', '') : undefined,
       tags
     };
   });

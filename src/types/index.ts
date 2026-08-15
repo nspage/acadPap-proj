@@ -10,6 +10,7 @@ export interface PaperCard {
   publishedDate: string;
   url: string;              // Publisher/Landing page
   pdfUrl?: string;          // Direct PDF stream link
+  doi?: string;
   tags: string[];
 }
 

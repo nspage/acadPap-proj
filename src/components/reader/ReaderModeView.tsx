@@ -6,11 +6,12 @@ import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink } from 
 
 interface ReaderModeViewProps {
   paper: PaperCard;
+  resolvedPdfUrl?: string | null;
   onTextSelected: (selection: TextSelectionContext) => void;
   onSwitchToOriginalPdf?: () => void;
 }
 
-export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }: ReaderModeViewProps) {
+export function ReaderModeView({ paper, resolvedPdfUrl, onTextSelected, onSwitchToOriginalPdf }: ReaderModeViewProps) {
   const [extractedPages, setExtractedPages] = useState<string[]>([]);
   const [isExtracting, setIsExtracting] = useState<boolean>(true);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
@@ -20,7 +21,8 @@ export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }:
     setIsExtracting(true);
 
     async function processPdfText() {
-      if (!paper.pdfUrl) {
+      const activePdfUrl = resolvedPdfUrl || paper.pdfUrl;
+      if (!activePdfUrl) {
         setIsExtracting(false);
         return;
       }
@@ -32,9 +34,9 @@ export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }:
         if (cachedBlob) {
           arrayBuffer = await cachedBlob.arrayBuffer();
         } else {
-          const targetFetchUrl = paper.pdfUrl.includes('export.arxiv.org')
-            ? paper.pdfUrl
-            : `/api/proxy?url=${encodeURIComponent(paper.pdfUrl)}`;
+          const targetFetchUrl = activePdfUrl.includes('export.arxiv.org') || activePdfUrl.includes('unpaywall.org')
+            ? activePdfUrl
+            : `/api/proxy?url=${encodeURIComponent(activePdfUrl)}`;
           const res = await fetch(targetFetchUrl);
           if (res.ok) {
             arrayBuffer = await res.arrayBuffer();
@@ -104,7 +106,7 @@ export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }:
 
     processPdfText();
     return () => { active = false; };
-  }, [paper.id, paper.pdfUrl]);
+  }, [paper.id, paper.pdfUrl, resolvedPdfUrl]);
 
   const handleSelection = () => {
     const sel = window.getSelection();
@@ -238,12 +240,12 @@ export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }:
         ) : (
           <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
             <p className="text-xs text-slate-400">
-              {paper.pdfUrl 
+              {(resolvedPdfUrl || paper.pdfUrl)
                 ? 'Original PDF stream parsing incomplete or restricted. You can view the original PDF canvas or open the publisher page.'
                 : 'Direct PDF stream link is unavailable for this repository.'}
             </p>
             <div className="flex justify-center gap-3 pt-2">
-              {onSwitchToOriginalPdf && paper.pdfUrl && (
+              {onSwitchToOriginalPdf && (resolvedPdfUrl || paper.pdfUrl) && (
                 <button
                   onClick={onSwitchToOriginalPdf}
                   className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors"
