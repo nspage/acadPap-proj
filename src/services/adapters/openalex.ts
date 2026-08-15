@@ -20,7 +20,11 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
   const filterQuery = `&filter=has_fulltext:true,is_oa:true`;
   const url = `https://api.openalex.org/works?per_page=15&page=${page}${filterQuery}${searchQuery}&sort=publication_year:desc`;
 
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ScDyE5FFaburyQ6XWmb7dY`
+    }
+  });
   if (!res.ok) throw new Error(`OpenAlex error: ${res.status}`);
   const data = await res.json();
 
