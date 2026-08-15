@@ -108,6 +108,17 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
+            <a
+              href={paper.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700/60 font-medium transition-colors"
+              title="Open Publisher Landing Page"
+            >
+              <span>Publisher Page</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+            </a>
+
             {/* View Tabs */}
             <div className="flex p-1 bg-slate-800/80 rounded-xl border border-slate-700/60">
               <button

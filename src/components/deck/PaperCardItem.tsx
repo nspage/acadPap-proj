@@ -13,10 +13,11 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
   const [isExpanded, setIsExpanded] = useState(false);
 
   return (
-    <div className="w-full h-full bg-slate-900/95 border border-slate-800/90 rounded-3xl p-6 shadow-2xl flex flex-col justify-between backdrop-blur-xl selection:bg-indigo-500/30 overflow-hidden">
-      {/* Top Header: Source Badge & Date */}
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-3">
+    <div className="w-full h-full bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between selection:bg-indigo-500/30 overflow-hidden">
+      {/* Scrollable Main Content Area */}
+      <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+        {/* Source Badge & Date */}
+        <div className="flex items-center justify-between gap-2">
           <span className="px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
             {paper.source}
           </span>
@@ -27,12 +28,12 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
         </div>
 
         {/* Paper Title */}
-        <h2 className="text-xl font-bold tracking-tight text-white line-clamp-3 leading-snug mb-3">
+        <h2 className="text-xl font-bold tracking-tight text-white line-clamp-3 leading-snug">
           {paper.title}
         </h2>
 
         {/* Authors */}
-        <div className="flex items-center gap-1.5 text-xs text-slate-300 mb-4 line-clamp-1">
+        <div className="flex items-center gap-1.5 text-xs text-slate-300 line-clamp-1">
           <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <span className="font-medium text-slate-300">{paper.authors.join(', ')}</span>
         </div>
@@ -40,13 +41,13 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
         {/* Abstract Box */}
         <div className="relative group">
           <div
-            className={`text-sm text-slate-300 leading-relaxed bg-slate-950/60 p-4 rounded-2xl border border-slate-800/80 transition-all ${
-              isExpanded ? 'max-h-64 overflow-y-auto' : 'line-clamp-4'
+            className={`text-sm text-slate-300 leading-relaxed bg-slate-950/80 p-4 rounded-2xl border border-slate-800/80 transition-all ${
+              isExpanded ? 'max-h-56 overflow-y-auto' : 'line-clamp-4'
             }`}
           >
             {paper.abstract}
           </div>
-          {paper.abstract.length > 200 && (
+          {paper.abstract.length > 180 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -65,11 +66,11 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
 
         {/* Tags */}
         {paper.tags && paper.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-4">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             {paper.tags.slice(0, 4).map((tag, idx) => (
               <span
                 key={idx}
-                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-800/80 text-slate-300 border border-slate-700/50"
+                className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700/60"
               >
                 <Tag className="w-2.5 h-2.5 text-slate-400" />
                 {tag}
@@ -79,8 +80,8 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
         )}
       </div>
 
-      {/* Footer Controls & Direct Publisher Link */}
-      <div className="pt-4 border-t border-slate-800/60 flex items-center justify-between gap-3 mt-4">
+      {/* Pinned Footer Controls & Direct Publisher Link */}
+      <div className="shrink-0 pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3 mt-3">
         <a
           href={paper.url}
           target="_blank"

@@ -3,7 +3,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { getCachedPaperPdf, cachePaperPdf } from '../../lib/db';
 import { TextSelectionContext } from '../../types';
-import { ChevronLeft, ChevronRight, HardDrive, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, HardDrive, CheckCircle, ExternalLink, RefreshCw } from 'lucide-react';
 
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
@@ -53,6 +53,11 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
     } finally {
       setIsCaching(false);
     }
+  };
+
+  const handleRetryStream = () => {
+    const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}&t=${Date.now()}`;
+    setPdfSource(proxyUrl);
   };
 
   const handleSelection = () => {
@@ -138,8 +143,31 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
           onLoadSuccess={({ numPages }) => setNumPages(numPages)}
           loading={<div className="p-12 text-slate-400 text-sm font-mono animate-pulse">Loading PDF document...</div>}
           error={
-            <div className="p-8 text-center text-rose-400 text-sm bg-rose-950/20 border border-rose-800/40 rounded-xl">
-              Failed to load PDF in-app. Use the publisher link above to read online.
+            <div className="p-8 text-center max-w-md bg-rose-950/20 border border-rose-800/40 rounded-2xl space-y-4 my-8">
+              <div className="text-rose-400 text-sm font-semibold">
+                Unable to load PDF stream in-app.
+              </div>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The target repository may restrict embedded PDF rendering or CORS stream piping.
+              </p>
+              <div className="flex items-center justify-center space-x-3 pt-2">
+                <button
+                  onClick={handleRetryStream}
+                  className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 font-medium transition-colors"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Retry Stream</span>
+                </button>
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-500/20 transition-colors"
+                >
+                  <span>Open Publisher Page</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
             </div>
           }
         >
