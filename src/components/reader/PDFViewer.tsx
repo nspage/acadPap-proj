@@ -58,9 +58,11 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
           }
         }
 
-        // 2. Fetch binary via Edge Proxy
-        const proxyUrl = `/api/proxy?url=${encodeURIComponent(url)}`;
-        const res = await fetch(proxyUrl);
+        // 2. Fetch binary (bypass proxy for export.arxiv.org which supports CORS natively)
+        const targetFetchUrl = url.includes('export.arxiv.org') 
+          ? url 
+          : `/api/proxy?url=${encodeURIComponent(url)}`;
+        const res = await fetch(targetFetchUrl);
         if (!res.ok) {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }

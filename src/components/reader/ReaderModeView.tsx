@@ -32,8 +32,10 @@ export function ReaderModeView({ paper, onTextSelected, onSwitchToOriginalPdf }:
         if (cachedBlob) {
           arrayBuffer = await cachedBlob.arrayBuffer();
         } else {
-          const proxyUrl = `/api/proxy?url=${encodeURIComponent(paper.pdfUrl)}`;
-          const res = await fetch(proxyUrl);
+          const targetFetchUrl = paper.pdfUrl.includes('export.arxiv.org')
+            ? paper.pdfUrl
+            : `/api/proxy?url=${encodeURIComponent(paper.pdfUrl)}`;
+          const res = await fetch(targetFetchUrl);
           if (res.ok) {
             arrayBuffer = await res.arrayBuffer();
           }
