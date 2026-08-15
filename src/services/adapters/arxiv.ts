@@ -19,13 +19,12 @@ export async function fetchArxivPapers(config: RepositoryConfig, page = 1): Prom
 
   return entries.map((entry: any) => {
     const rawId = entry.id || '';
-    const arxivId = rawId.split('/abs/').pop() || rawId;
-    
-    let pdfUrl: string | undefined;
-    if (Array.isArray(entry.link)) {
-      const pdfLink = entry.link.find((l: any) => l['@_title'] === 'pdf' || l['@_type'] === 'application/pdf');
-      pdfUrl = pdfLink ? pdfLink['@_href'] : undefined;
+    let arxivId = rawId.split('/abs/').pop() || rawId;
+    if (arxivId.includes('/')) {
+      arxivId = arxivId.split('/').pop() || arxivId;
     }
+
+    const pdfUrl = `https://export.arxiv.org/pdf/${arxivId}.pdf`;
 
     const authors = Array.isArray(entry.author)
       ? entry.author.map((a: any) => a.name)
@@ -39,8 +38,8 @@ export async function fetchArxivPapers(config: RepositoryConfig, page = 1): Prom
       abstract: (entry.summary || '').replace(/\s+/g, ' ').trim(),
       authors,
       publishedDate: entry.published?.split('T')[0] || '',
-      url: rawId,
-      pdfUrl: pdfUrl || `https://arxiv.org/pdf/${arxivId}.pdf`,
+      url: `https://arxiv.org/abs/${arxivId}`,
+      pdfUrl,
       tags: [category]
     };
   });

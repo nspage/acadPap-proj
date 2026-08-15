@@ -4,17 +4,14 @@ import { fetchWithCORSProxy } from '../../lib/proxy';
 function cleanHtmlText(rawHtml: string): string {
   if (!rawHtml) return '';
   
-  // 1. Strip HTML tags
   let cleaned = rawHtml.replace(/<[^>]*>?/gm, '');
 
-  // 2. Decode HTML entities using DOM parser in browser or fallback entity map
   if (typeof document !== 'undefined') {
     const txt = document.createElement('textarea');
     txt.innerHTML = cleaned;
     cleaned = txt.value;
   }
 
-  // 3. Fallback common entity replacements
   return cleaned
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -25,8 +22,8 @@ function cleanHtmlText(rawHtml: string): string {
     .replace(/&iacute;/gi, 'í')
     .replace(/&aacute;/gi, 'á')
     .replace(/&eacute;/gi, 'é')
+    .replace(/&vcute;/gi, 'ú')
     .replace(/&oacute;/gi, 'ó')
-    .replace(/&uacute;/gi, 'ú')
     .replace(/&ntilde;/gi, 'ñ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -40,16 +37,24 @@ export async function fetchZenodoPapers(config: RepositoryConfig, page = 1): Pro
   if (!res.ok) throw new Error(`Zenodo error: ${res.status}`);
   const json = await res.json();
 
-  return (json.hits?.hits || []).map((hit: any) => ({
-    id: `zenodo:${hit.id}`,
-    source: config.name,
-    sourceType: 'zenodo',
-    title: cleanHtmlText(hit.metadata?.title || 'Untitled'),
-    abstract: cleanHtmlText(hit.metadata?.description || 'No abstract provided.'),
-    authors: (hit.metadata?.creators || []).map((c: any) => cleanHtmlText(c.name || 'Unknown')),
-    publishedDate: hit.metadata?.publication_date || '',
-    url: hit.links?.html || `https://zenodo.org/records/${hit.id}`,
-    pdfUrl: hit.files?.find((f: any) => f.type === 'pdf' || f.key?.endsWith('.pdf'))?.links?.self,
-    tags: (hit.metadata?.keywords || ['open science']).map((k: string) => cleanHtmlText(k))
-  }));
+  return (json.hits?.hits || []).map((hit: any) => {
+    const pdfFile = hit.files?.find((f: any) => f.type === 'pdf' || f.key?.endsWith('.pdf'));
+    // Direct Zenodo binary download endpoint
+    const pdfUrl = pdfFile
+      ? `https://zenodo.org/records/${hit.id}/files/${pdfFile.key}?download=1`
+      : undefined;
+
+    return {
+      id: `zenodo:${hit.id}`,
+      source: config.name,
+      sourceType: 'zenodo',
+      title: cleanHtmlText(hit.metadata?.title || 'Untitled'),
+      abstract: cleanHtmlText(hit.metadata?.description || 'No abstract provided.'),
+      authors: (hit.metadata?.creators || []).map((c: any) => cleanHtmlText(c.name || 'Unknown')),
+      publishedDate: hit.metadata?.publication_date || '',
+      url: hit.links?.html || `https://zenodo.org/records/${hit.id}`,
+      pdfUrl,
+      tags: (hit.metadata?.keywords || ['open science']).map((k: string) => cleanHtmlText(k))
+    };
+  });
 }

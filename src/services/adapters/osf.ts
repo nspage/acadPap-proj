@@ -14,8 +14,9 @@ export async function fetchOSFPapers(config: RepositoryConfig, page = 1): Promis
 
   return (json.data || []).map((item: any) => {
     const landingUrl = item.links?.html || `https://osf.io/preprints/${slug}/${item.id}`;
-    // Direct PDF binary download link from OSF
-    const pdfUrl = `${landingUrl}/download`;
+    const fileId = item.relationships?.primary_file?.data?.id;
+    // Direct OSF binary download endpoint
+    const pdfUrl = fileId ? `https://osf.io/download/${fileId}/` : undefined;
 
     return {
       id: `osf:${slug}:${item.id}`,
