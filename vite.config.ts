@@ -45,22 +45,28 @@ export default defineConfig({
               return;
             }
 
-            // Fetch target URL server-side from dev server
+            // Fetch target URL server-side with full redirect following and Chrome User-Agent
             const upstreamRes = await fetch(targetUrl, {
               headers: {
-                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
-              }
+                'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'application/pdf, application/octet-stream, text/plain, */*'
+              },
+              redirect: 'follow'
             });
 
-            res.statusCode = upstreamRes.status;
+            if (!upstreamRes.ok) {
+              res.statusCode = upstreamRes.status;
+              res.end(`Upstream returned ${upstreamRes.status}`);
+              return;
+            }
+
+            res.statusCode = 200;
             res.setHeader('Access-Control-Allow-Origin', '*');
             res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
             res.setHeader('Access-Control-Allow-Headers', '*');
 
-            const contentType = upstreamRes.headers.get('content-type');
-            if (contentType) {
-              res.setHeader('Content-Type', contentType);
-            }
+            const contentType = upstreamRes.headers.get('content-type') || 'application/pdf';
+            res.setHeader('Content-Type', contentType);
 
             const arrayBuffer = await upstreamRes.arrayBuffer();
             res.end(Buffer.from(arrayBuffer));

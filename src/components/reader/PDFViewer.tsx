@@ -3,7 +3,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { getCachedPaperPdf, db } from '../../lib/db';
 import { TextSelectionContext } from '../../types';
-import { ChevronLeft, ChevronRight, HardDrive, CheckCircle, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CheckCircle, ExternalLink, RefreshCw, Loader2, AlertCircle } from 'lucide-react';
 
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
@@ -17,10 +17,17 @@ interface PDFViewerProps {
   onTextSelected: (selection: TextSelectionContext) => void;
 }
 
+function isValidPdfHeader(buffer: ArrayBuffer): boolean {
+  if (!buffer || buffer.byteLength < 5) return false;
+  const bytes = new Uint8Array(buffer, 0, 5);
+  const header = String.fromCharCode(...bytes);
+  return header.startsWith('%PDF');
+}
+
 export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
   const [numPages, setNumPages] = useState<number>(1);
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pdfSource, setPdfSource] = useState<Blob | null>(null);
+  const [pdfData, setPdfData] = useState<Uint8Array | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState<boolean>(true);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [isCached, setIsCached] = useState<boolean>(false);
@@ -30,6 +37,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
     let active = true;
     setIsLoadingPdf(true);
     setPdfError(null);
+    setPdfData(null);
 
     async function loadPdfBinary() {
       try {
@@ -38,10 +46,16 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
         if (!active) return;
         
         if (cachedBlob) {
-          setPdfSource(cachedBlob);
-          setIsCached(true);
-          setIsLoadingPdf(false);
-          return;
+          const cachedBuffer = await cachedBlob.arrayBuffer();
+          if (isValidPdfHeader(cachedBuffer)) {
+            setPdfData(new Uint8Array(cachedBuffer));
+            setIsCached(true);
+            setIsLoadingPdf(false);
+            return;
+          } else {
+            // Evict corrupted/invalid cached blob from Dexie
+            await db.pdfCache.delete(paperId);
+          }
         }
 
         // 2. Fetch binary via Edge Proxy
@@ -51,13 +65,20 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
           throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         }
         
-        const blob = await res.blob();
+        const arrayBuffer = await res.arrayBuffer();
         if (!active) return;
 
-        setPdfSource(blob);
+        // 3. Validate %PDF magic header bytes
+        if (!isValidPdfHeader(arrayBuffer)) {
+          throw new Error('Host repository returned an invalid non-PDF stream.');
+        }
+
+        const uint8Data = new Uint8Array(arrayBuffer);
+        setPdfData(uint8Data);
         setIsLoadingPdf(false);
 
-        // 3. Automatically cache Blob in Dexie IndexedDB for instant offline reading
+        // 4. Store validated PDF Blob in Dexie IndexedDB for instant offline reading
+        const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
         await db.pdfCache.put({
           paperId,
           blob,
@@ -68,7 +89,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
       } catch (err: any) {
         if (!active) return;
         console.error('Failed to load PDF binary:', err);
-        setPdfError(err.message || 'Failed to fetch PDF binary');
+        setPdfError(err.message || 'Failed to fetch valid PDF binary stream');
         setIsLoadingPdf(false);
       }
     }
@@ -128,9 +149,13 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
           </button>
         </div>
 
-        <div className="flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+        <div className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-medium border ${
+          isCached 
+            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' 
+            : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+        }`}>
           <CheckCircle className="w-3.5 h-3.5" />
-          <span>{isCached ? 'Cached Offline in Dexie' : 'Binary Stream Loaded'}</span>
+          <span>{isCached ? 'Cached Offline in Dexie' : 'Stream Verified (%PDF)'}</span>
         </div>
       </div>
 
@@ -145,13 +170,14 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
             <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
             <p className="text-xs text-slate-400 font-mono">Fetching raw PDF binary stream...</p>
           </div>
-        ) : pdfError || !pdfSource ? (
+        ) : pdfError || !pdfData ? (
           <div className="p-8 text-center max-w-md bg-rose-950/20 border border-rose-800/40 rounded-2xl space-y-4 my-8">
-            <div className="text-rose-400 text-sm font-semibold">
-              Unable to load PDF stream directly in-app.
+            <div className="flex items-center justify-center space-x-2 text-rose-400 text-sm font-semibold">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>Unable to load PDF stream in-app</span>
             </div>
             <p className="text-xs text-slate-400 leading-relaxed">
-              {pdfError || 'The target repository may block embedded stream piping.'}
+              {pdfError || 'The target repository may restrict embedded stream piping.'}
             </p>
             <div className="flex items-center justify-center space-x-3 pt-2">
               <button
@@ -174,7 +200,7 @@ export function PDFViewer({ paperId, url, onTextSelected }: PDFViewerProps) {
           </div>
         ) : (
           <Document
-            file={pdfSource}
+            file={{ data: pdfData }}
             onLoadSuccess={({ numPages }) => setNumPages(numPages)}
             loading={<div className="p-12 text-slate-400 text-sm font-mono animate-pulse">Parsing PDF document pages...</div>}
             error={
