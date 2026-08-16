@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RepositoryConfig } from '../../types';
-import { X, Key, Database, Sparkles, Check, RefreshCw, ShieldCheck } from 'lucide-react';
+import { X, Key, Database, Sparkles, Check, RefreshCw, ShieldCheck, Cloud } from 'lucide-react';
 
 interface SettingsModalProps {
   apiKey: string;
@@ -22,6 +22,10 @@ export function SettingsModal({
   const [inputKey, setInputKey] = useState(apiKey);
   const [savedKey, setSavedKey] = useState(false);
   
+  const [githubPat, setGithubPat] = useState(() => localStorage.getItem('github_pat') || '');
+  const [gistId, setGistId] = useState(() => localStorage.getItem('gist_id') || '');
+  const [savedCloud, setSavedCloud] = useState(false);
+  
   const [filterGeo, setFilterGeo] = useState(() => localStorage.getItem('filter_geo') === 'true');
   const [filterImpact, setFilterImpact] = useState(() => localStorage.getItem('filter_impact') === 'true');
 
@@ -35,6 +39,13 @@ export function SettingsModal({
     const next = !filterImpact;
     setFilterImpact(next);
     localStorage.setItem('filter_impact', next.toString());
+  };
+
+  const handleCloudSave = () => {
+    localStorage.setItem('github_pat', githubPat.trim());
+    localStorage.setItem('gist_id', gistId.trim());
+    setSavedCloud(true);
+    setTimeout(() => setSavedCloud(false), 2000);
   };
 
   const handleKeySave = () => {
@@ -56,6 +67,40 @@ export function SettingsModal({
         </div>
 
         <div className="space-y-6">
+          {/* Cloud Sync Section */}
+          <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+            <label className="block text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+              <Cloud className="w-3.5 h-3.5" /> Cloud Sync (Gist Backend)
+            </label>
+            <p className="text-xs text-slate-400 mb-3 leading-relaxed">
+              Enable cross-device sync by providing a GitHub Personal Access Token (classic, `gist` scope) and a private Gist ID.
+            </p>
+            <div className="flex flex-col space-y-2">
+              <input
+                type="password"
+                value={githubPat}
+                onChange={(e) => setGithubPat(e.target.value)}
+                placeholder="GitHub PAT (ghp_...)"
+                className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+              />
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={gistId}
+                  onChange={(e) => setGistId(e.target.value)}
+                  placeholder="Private Gist ID"
+                  className="flex-1 px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-200 focus:outline-none focus:border-indigo-500"
+                />
+                <button
+                  onClick={handleCloudSave}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1 transition-all"
+                >
+                  {savedCloud ? <Check className="w-4 h-4" /> : 'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* Gemini API Key Section */}
           <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
             <label className="block text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">

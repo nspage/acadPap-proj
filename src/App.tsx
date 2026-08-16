@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PaperCard, PaperNote, RepositoryConfig } from './types';
 import { db, initializeDatabase, DEFAULT_SOURCES } from './lib/db';
 import { fetchAllEnabledPapers } from './services/adapters';
+import { pushStateToGist, pullStateFromGist } from './services/gist-sync';
 import { Header } from './components/common/Header';
 import { SwipeDeck } from './components/deck/SwipeDeck';
 import { JournalView } from './components/journal/JournalView';
@@ -12,6 +13,8 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Loader2, Compass, TrendingUp, Clock } from 'lucide-react';
 
 export function App() {
+  const isHydrating = useRef(false);
+  const syncTimeout = useRef<NodeJS.Timeout | null>(null);
   const [activeTab, setActiveTab] = useState<'discover' | 'journal'>('discover');
   const [papers, setPapers] = useState<PaperCard[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -58,13 +61,42 @@ export function App() {
 
   useEffect(() => {
     let active = true;
-    initializeDatabase().then(() => {
+    initializeDatabase().then(async () => {
       if (active) {
+        const pat = localStorage.getItem('github_pat');
+        const gistId = localStorage.getItem('gist_id');
+        
+        if (pat && gistId) {
+          isHydrating.current = true;
+          await pullStateFromGist(pat, gistId);
+          isHydrating.current = false;
+        }
+        
         loadFeed();
       }
     });
     return () => { active = false; };
   }, []);
+
+  // Reactive Debounced Auto-Push
+  useEffect(() => {
+    // Skip if we haven't loaded, or if we are actively pulling from the cloud
+    if (isLoading || isHydrating.current) return;
+    
+    const pat = localStorage.getItem('github_pat');
+    const gistId = localStorage.getItem('gist_id');
+    if (!pat || !gistId) return;
+
+    if (syncTimeout.current) clearTimeout(syncTimeout.current);
+    
+    syncTimeout.current = setTimeout(() => {
+      pushStateToGist(pat, gistId);
+    }, 3000);
+
+    return () => {
+      if (syncTimeout.current) clearTimeout(syncTimeout.current);
+    };
+  }, [savedPapers, notes, dbSources]);
 
   const handleSavePaper = async (paper: PaperCard) => {
     try {
