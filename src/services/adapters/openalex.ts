@@ -15,14 +15,30 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
   const query = config.params.queryKeywords || '';
   const searchQuery = query ? `&search=${encodeURIComponent(query)}` : '';
   
-  // We want to fetch papers with full text available or OA.
-  // We prioritize those that have an OA URL or primary location PDF.
-  let filterQuery = `&filter=has_fulltext:true,is_oa:true`;
-  if (config.params.openAlexFilter) {
-    filterQuery = `&filter=has_fulltext:true,is_oa:true,${config.params.openAlexFilter}`;
+  const useGeoFilter = localStorage.getItem('filter_geo') === 'true';
+  const useImpactFilter = localStorage.getItem('filter_impact') === 'true';
+  
+  // We want to fetch papers with full text available, OA, and exclusively in English.
+  let filterQuery = `&filter=has_fulltext:true,is_oa:true,language:en`;
+  
+  if (useGeoFilter) {
+    // Whitelist top research regions: NA (US, CA), Europe (GB, DE, FR, CH, NL, SE, DK, FI, NO, IT, ES, AT, BE, IE), Asia/Oceania (JP, KR, CN, SG, IL, TW, HK, AU, NZ)
+    filterQuery += `,institutions.country_code:us|ca|gb|de|fr|ch|nl|se|dk|fi|no|it|es|at|be|ie|jp|kr|cn|sg|il|tw|hk|au|nz`;
   }
   
-  const url = `https://api.openalex.org/works?per_page=15&page=${page}${filterQuery}${searchQuery}&sort=publication_year:desc`;
+  if (useImpactFilter) {
+    // 5+ citations ensures the paper has some proven baseline impact
+    filterQuery += `,cited_by_count:>5`;
+  }
+  
+  if (config.params.openAlexFilter) {
+    filterQuery += `,${config.params.openAlexFilter}`;
+  }
+  
+  const sortImpact = localStorage.getItem('sort_impact') === 'true';
+  const sortQuery = sortImpact ? `&sort=publication_year:desc,cited_by_count:desc` : `&sort=publication_year:desc`;
+
+  const url = `https://api.openalex.org/works?per_page=15&page=${page}${filterQuery}${searchQuery}${sortQuery}`;
 
   const res = await fetch(url, {
     headers: {
@@ -75,7 +91,24 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
       url: work.primary_location?.landing_page_url || work.id,
       pdfUrl,
       doi: work.doi ? work.doi.replace('https://doi.org/', '') : undefined,
-      tags
+      tags,
+      hasContent: Boolean(work.has_content?.grobid_xml || work.has_content?.pdf),
+      
+      citationCount: work.cited_by_count,
+      fwci: work.fwci,
+      documentType: work.type || work.primary_location?.raw_type,
+      oaStatus: work.open_access?.oa_status,
+      isRetracted: work.is_retracted,
+      referencedWorksCount: work.referenced_works_count,
+      primaryInstitution: work.authorships?.[0]?.institutions?.[0]?.display_name,
+      primaryInstitutionCountry: work.authorships?.[0]?.institutions?.[0]?.country_code,
+      funders: Array.isArray(work.funders) ? work.funders.map((f: any) => f.display_name) : [],
+      sdgs: Array.isArray(work.sustainable_development_goals) ? work.sustainable_development_goals.map((s: any) => s.display_name) : [],
+      fullAuthorships: Array.isArray(work.authorships) ? work.authorships.map((a: any) => ({
+        name: a.author?.display_name || 'Unknown',
+        institution: a.institutions?.[0]?.display_name || 'Unknown Institution',
+        countryCode: a.institutions?.[0]?.country_code || ''
+      })) : []
     };
   });
 }

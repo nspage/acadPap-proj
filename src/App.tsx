@@ -9,7 +9,7 @@ import { ReaderModal } from './components/reader/ReaderModal';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { RabbitHoleExplorer } from './components/deck/RabbitHoleExplorer';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { Loader2, Compass } from 'lucide-react';
+import { Loader2, Compass, TrendingUp, Clock } from 'lucide-react';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<'discover' | 'journal'>('discover');
@@ -19,6 +19,14 @@ export function App() {
   const [selectedReaderPaper, setSelectedReaderPaper] = useState<PaperCard | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
+  const [sortImpact, setSortImpact] = useState<boolean>(() => localStorage.getItem('sort_impact') === 'true');
+
+  const toggleSortImpact = () => {
+    const next = !sortImpact;
+    setSortImpact(next);
+    localStorage.setItem('sort_impact', next.toString());
+    loadFeed();
+  };
 
   // Dexie live reactive queries
   const savedPapers = useLiveQuery(() => db.savedPapers.toArray(), []) || [];
@@ -61,8 +69,13 @@ export function App() {
   const handleSavePaper = async (paper: PaperCard) => {
     try {
       await db.savedPapers.put(paper);
-      // Automatically open Deep Reader modal when swiped right
-      setSelectedReaderPaper(paper);
+      if (paper.hasContent) {
+        // Open in-app reader for papers with hosted fulltext
+        setSelectedReaderPaper(paper);
+      } else {
+        // Open publisher page for papers without hosted content
+        window.open(paper.url, '_blank', 'noopener,noreferrer');
+      }
     } catch (err) {
       console.error('Failed to save paper:', err);
     }
@@ -104,6 +117,7 @@ export function App() {
       await db.notes.clear();
       await db.discardedIds.clear();
       await db.pdfCache.clear();
+      await db.contentCache.clear();
       await db.sources.clear();
       await db.sources.bulkAdd(DEFAULT_SOURCES);
       loadFeed();
@@ -169,21 +183,52 @@ export function App() {
       {/* Main View Area */}
       <main className="flex-1 flex flex-col items-center justify-start p-4 w-full">
         {activeTab === 'discover' ? (
-          <div className="w-full flex flex-col items-center h-full max-w-md mx-auto">
-            {/* Explorer Trigger */}
-            <div className="w-full flex space-x-2 pb-4 mb-2 px-2 items-center justify-between">
-              <div className="flex flex-col space-y-0.5">
-                <span className="text-xs text-slate-400 font-medium">Currently Exploring</span>
-                <span className="text-sm font-bold text-indigo-300">
-                  {sources.find(s => s.enabled)?.name || 'Default Feed'}
-                </span>
+          <div className="w-full flex flex-col items-center h-full max-w-3xl mx-auto">
+            {/* Explorer & Saved Topics Ribbon */}
+            <div className="w-full flex flex-col space-y-3 pb-2 mb-4 px-2 border-b border-slate-800/60">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Saved Explorations</span>
+                <button
+                  onClick={() => setIsExplorerOpen(true)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/20 text-indigo-400 text-xs font-semibold rounded-lg transition-all"
+                >
+                  <Compass className="w-3.5 h-3.5" />
+                  <span>Dive New Rabbit Hole</span>
+                </button>
               </div>
+              
+              <div className="flex items-center space-x-2 overflow-x-auto pb-3 custom-scrollbar w-full snap-x">
+                {sources.map(source => (
+                  <button
+                    key={source.id}
+                    onClick={() => handleSelectChannel(source.id)}
+                    className={`shrink-0 snap-start px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                      source.enabled 
+                        ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-md shadow-indigo-500/20' 
+                        : 'bg-slate-900 border border-slate-800 text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {source.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Sort Toggle */}
+            <div className="w-full flex items-center justify-between px-3 pb-2 mb-2">
+              <span className="text-[11px] text-slate-500 font-medium">Feed Ordering</span>
               <button
-                onClick={() => setIsExplorerOpen(true)}
-                className="flex items-center space-x-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-full shadow-lg shadow-indigo-500/25 transition-all"
+                onClick={toggleSortImpact}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-all bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200"
               >
-                <Compass className="w-4 h-4" />
-                <span>Explore Rabbit Hole</span>
+                {sortImpact ? (
+                  <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                ) : (
+                  <Clock className="w-3.5 h-3.5 text-emerald-400" />
+                )}
+                <span className={sortImpact ? "text-amber-400" : "text-emerald-400"}>
+                  {sortImpact ? 'Top Impact' : 'Most Recent'}
+                </span>
               </button>
             </div>
 
@@ -230,7 +275,10 @@ export function App() {
           sources={sources}
           onToggleSource={handleToggleSource}
           onResetDatabase={handleResetDatabase}
-          onClose={() => setIsSettingsOpen(false)}
+          onClose={() => {
+            setIsSettingsOpen(false);
+            loadFeed();
+          }}
         />
       )}
 

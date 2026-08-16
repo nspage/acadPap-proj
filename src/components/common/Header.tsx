@@ -25,7 +25,7 @@ export function Header({
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-1 ring-white/20">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <div>
+          <div className="hidden sm:block">
             <h1 className="text-base font-bold tracking-tight text-white flex items-center gap-2">
               Serendipity <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400 font-mono border border-indigo-500/20">PWA</span>
             </h1>

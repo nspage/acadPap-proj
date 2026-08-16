@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import { PaperCard, PaperNote, RepositoryConfig, CachedPdf } from '../types';
+import { PaperCard, PaperNote, RepositoryConfig, CachedPdf, CachedContent } from '../types';
 
 export const db = new Dexie('AcademicSerendipityDB') as Dexie & {
   savedPapers: EntityTable<PaperCard, 'id'>;
@@ -7,6 +7,7 @@ export const db = new Dexie('AcademicSerendipityDB') as Dexie & {
   sources: EntityTable<RepositoryConfig, 'id'>;
   discardedIds: EntityTable<{ id: string; discardedAt: number }, 'id'>;
   pdfCache: EntityTable<CachedPdf, 'paperId'>;
+  contentCache: EntityTable<CachedContent, 'paperId'>;
 };
 
 db.version(2).stores({
@@ -19,44 +20,12 @@ db.version(2).stores({
 
 export const DEFAULT_SOURCES: RepositoryConfig[] = [
   {
-    id: 'ch-all-biz',
-    name: 'All Business & Tech',
+    id: 'ch-global-recent',
+    name: 'Global Recent',
     type: 'openalex',
     enabled: true,
-    category: 'Business & Tech',
-    params: { openAlexFilter: 'topics.id:t10003|t10058|t10145|t10344|t10609|t11161|t12128|t10763|t11715|t11891|t11995|t13053|t13370|t13706|t14182' }
-  },
-  {
-    id: 'ch-innovation',
-    name: 'Innovation & Enterprise',
-    type: 'openalex',
-    enabled: false,
-    category: 'Innovation',
-    params: { openAlexFilter: 'topics.id:t10003|t10058|t13053' }
-  },
-  {
-    id: 'ch-marketing',
-    name: 'Marketing & Consumer',
-    type: 'openalex',
-    enabled: false,
-    category: 'Marketing',
-    params: { openAlexFilter: 'topics.id:t10145|t10609|t11161' }
-  },
-  {
-    id: 'ch-ai-data',
-    name: 'AI, Data & FinTech',
-    type: 'openalex',
-    enabled: false,
-    category: 'AI & Data',
-    params: { openAlexFilter: 'topics.id:t11891|t11995|t12128|t10763' }
-  },
-  {
-    id: 'ch-management',
-    name: 'Management & Org',
-    type: 'openalex',
-    enabled: false,
-    category: 'Management',
-    params: { openAlexFilter: 'topics.id:t10344|t13706|t11715|t13370' }
+    category: 'All Fields',
+    params: { openAlexFilter: '' }
   }
 ];
 
@@ -68,6 +37,28 @@ db.version(3).stores({
   pdfCache: 'paperId, cachedAt'
 }).upgrade(async (tx) => {
   // Purge old sources (arxiv, zenodo, osf) and insert new openalex channels
+  await tx.table('sources').clear();
+  await tx.table('sources').bulkAdd(DEFAULT_SOURCES);
+});
+
+db.version(4).stores({
+  savedPapers: 'id, sourceType, publishedDate',
+  notes: 'id, paperId, updatedAt',
+  sources: 'id, type, enabled',
+  discardedIds: 'id, discardedAt',
+  pdfCache: 'paperId, cachedAt',
+  contentCache: 'paperId, cachedAt'
+});
+
+db.version(5).stores({
+  savedPapers: 'id, sourceType, publishedDate',
+  notes: 'id, paperId, updatedAt',
+  sources: 'id, type, enabled',
+  discardedIds: 'id, discardedAt',
+  pdfCache: 'paperId, cachedAt',
+  contentCache: 'paperId, cachedAt'
+}).upgrade(async (tx) => {
+  // Purge the old hardcoded T-number predefined feeds and set up the Global Recent feed
   await tx.table('sources').clear();
   await tx.table('sources').bulkAdd(DEFAULT_SOURCES);
 });

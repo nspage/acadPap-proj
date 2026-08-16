@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { RepositoryConfig } from '../../types';
-import { X, Key, Database, Sparkles, Check, RefreshCw } from 'lucide-react';
+import { X, Key, Database, Sparkles, Check, RefreshCw, ShieldCheck } from 'lucide-react';
 
 interface SettingsModalProps {
   apiKey: string;
@@ -21,6 +21,21 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const [inputKey, setInputKey] = useState(apiKey);
   const [savedKey, setSavedKey] = useState(false);
+  
+  const [filterGeo, setFilterGeo] = useState(() => localStorage.getItem('filter_geo') === 'true');
+  const [filterImpact, setFilterImpact] = useState(() => localStorage.getItem('filter_impact') === 'true');
+
+  const toggleGeo = () => {
+    const next = !filterGeo;
+    setFilterGeo(next);
+    localStorage.setItem('filter_geo', next.toString());
+  };
+
+  const toggleImpact = () => {
+    const next = !filterImpact;
+    setFilterImpact(next);
+    localStorage.setItem('filter_impact', next.toString());
+  };
 
   const handleKeySave = () => {
     onSaveApiKey(inputKey.trim());
@@ -63,6 +78,47 @@ export function SettingsModal({
               >
                 {savedKey ? <Check className="w-4 h-4" /> : 'Save'}
               </button>
+            </div>
+          </div>
+
+          {/* OpenAlex Quality Filters */}
+          <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
+            <label className="block text-xs font-semibold text-indigo-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+              <ShieldCheck className="w-3.5 h-3.5" /> Discovery Quality Filters
+            </label>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-slate-200">Top Research Regions</div>
+                  <div className="text-[11px] text-slate-400">Limit to North America, Europe, and top Asian hubs</div>
+                </div>
+                <button
+                  onClick={toggleGeo}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    filterGeo
+                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                      : 'bg-slate-800 text-slate-500 border border-slate-700'
+                  }`}
+                >
+                  {filterGeo ? 'Active' : 'Disabled'}
+                </button>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-medium text-slate-200">Proven Impact Baseline</div>
+                  <div className="text-[11px] text-slate-400">Require minimum 5 citations to surface in feed</div>
+                </div>
+                <button
+                  onClick={toggleImpact}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    filterImpact
+                      ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
+                      : 'bg-slate-800 text-slate-500 border border-slate-700'
+                  }`}
+                >
+                  {filterImpact ? 'Active' : 'Disabled'}
+                </button>
+              </div>
             </div>
           </div>
 

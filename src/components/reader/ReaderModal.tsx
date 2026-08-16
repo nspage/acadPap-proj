@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { PaperCard, PaperNote, TextSelectionContext } from '../../types';
-import { PDFViewer } from './PDFViewer';
 import { ReaderModeView } from './ReaderModeView';
 import { db } from '../../lib/db';
 import { fetchDictionaryDefinition, fetchContextualExplanation } from '../../services/explainer';
-import { X, Sparkles, Book, Save, ExternalLink, Quote, Lightbulb, FileText, Eye } from 'lucide-react';
+import { X, Sparkles, Book, Save, ExternalLink, Quote, Lightbulb, FileText } from 'lucide-react';
 
 interface ReaderModalProps {
   paper: PaperCard | null;
@@ -12,12 +11,9 @@ interface ReaderModalProps {
   onClose: () => void;
 }
 
-import { resolvePdfUrl } from '../../services/unpaywall';
-
 export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
-  const [activeTab, setActiveTab] = useState<'reader' | 'pdf' | 'notes'>('reader');
-  const [resolvedPdfUrl, setResolvedPdfUrl] = useState<string | null>(null);
-  
+  const [activeTab, setActiveTab] = useState<'reader' | 'notes'>('reader');
+
   const [note, setNote] = useState<PaperNote>({
     id: crypto.randomUUID(),
     paperId: paper?.id || '',
@@ -37,11 +33,6 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
 
   useEffect(() => {
     if (!paper) return;
-    
-    // Attempt to resolve the best PDF URL via Unpaywall
-    resolvePdfUrl(paper).then(url => {
-      setResolvedPdfUrl(url || paper.pdfUrl || null);
-    });
 
     db.notes.where('paperId').equals(paper.id).first().then((existingNote) => {
       if (existingNote) {
@@ -142,15 +133,6 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
                 <span>Reader Mode</span>
               </button>
               <button
-                onClick={() => setActiveTab('pdf')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
-                  activeTab === 'pdf' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Eye className="w-3.5 h-3.5" />
-                <span>Original PDF</span>
-              </button>
-              <button
                 onClick={() => setActiveTab('notes')}
                 className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
                   activeTab === 'notes' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
@@ -176,31 +158,8 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
             <div className="w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
               <ReaderModeView
                 paper={paper}
-                resolvedPdfUrl={resolvedPdfUrl}
                 onTextSelected={handleTextSelected}
-                onSwitchToOriginalPdf={() => setActiveTab('pdf')}
               />
-            </div>
-          ) : activeTab === 'pdf' ? (
-            <div className="w-full h-full p-4 overflow-y-auto flex flex-col items-center">
-              {resolvedPdfUrl ? (
-                <PDFViewer paperId={paper.id} url={resolvedPdfUrl} publisherUrl={paper.url} onTextSelected={handleTextSelected} />
-              ) : (
-                <div className="m-auto text-center p-8 max-w-md bg-slate-950/60 rounded-2xl border border-slate-800">
-                  <p className="text-sm text-slate-300 mb-4">
-                    Direct PDF stream is unavailable for this record.
-                  </p>
-                  <a
-                    href={paper.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center space-x-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
-                  >
-                    <span>Open Publisher Landing Page</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                </div>
-              )}
             </div>
           ) : (
             <div className="w-full h-full p-6 overflow-y-auto space-y-6">
@@ -223,7 +182,7 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
                   <Book className="w-4 h-4" /> Vocabulary & Jargon ({note.jargonTerms.length})
                 </label>
                 {note.jargonTerms.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">Select text in the PDF reader to explain & capture jargon terms.</p>
+                  <p className="text-xs text-slate-500 italic">Select text in the reader to explain & capture jargon terms.</p>
                 ) : (
                   <div className="space-y-2">
                     {note.jargonTerms.map((j, idx) => (
@@ -242,7 +201,7 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
                   <Quote className="w-4 h-4" /> Saved Excerpts & Quotes ({note.quotes.length})
                 </label>
                 {note.quotes.length === 0 ? (
-                  <p className="text-xs text-slate-500 italic">Highlight excerpts in the PDF to save them as quotes.</p>
+                  <p className="text-xs text-slate-500 italic">Highlight excerpts in the reader to save them as quotes.</p>
                 ) : (
                   <div className="space-y-2">
                     {note.quotes.map((q, idx) => (

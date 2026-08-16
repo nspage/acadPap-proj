@@ -1,5 +1,11 @@
 export type RepositoryType = 'openalex';
 
+export interface AuthorAffiliation {
+  name: string;
+  institution: string;
+  countryCode: string;
+}
+
 export interface PaperCard {
   id: string;               // Unique: e.g. "openalex:W12345"
   source: string;           // Display label (e.g. "OpenAlex (AI & ML)")
@@ -12,6 +18,20 @@ export interface PaperCard {
   pdfUrl?: string;          // Direct PDF stream link
   doi?: string;
   tags: string[];
+  hasContent?: boolean;
+  
+  // Contextual Metadata
+  citationCount?: number;
+  fwci?: number;
+  documentType?: string;
+  oaStatus?: string;
+  primaryInstitution?: string;
+  primaryInstitutionCountry?: string;
+  funders?: string[];
+  sdgs?: string[];
+  isRetracted?: boolean;
+  referencedWorksCount?: number;
+  fullAuthorships?: AuthorAffiliation[];
 }
 
 export interface PaperNote {
@@ -30,6 +50,13 @@ export interface CachedPdf {
   blob: Blob;               // Stored binary PDF file
   cachedAt: number;         // Timestamp when cached
   sizeBytes: number;        // Size of the binary file
+}
+
+export interface CachedContent {
+  paperId: string;
+  xmlText: string;
+  cachedAt: number;
+  sizeBytes: number;
 }
 
 export interface RepositoryConfig {

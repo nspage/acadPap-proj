@@ -143,13 +143,25 @@ export function JournalView({ savedPapers, notes, onOpenReader, onRemovePaper }:
                     <Trash2 className="w-4 h-4" />
                   </button>
 
-                  <button
-                    onClick={() => onOpenReader(paper)}
-                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-500/20 transition-all"
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Open Reader</span>
-                  </button>
+                  {paper.hasContent ? (
+                    <button
+                      onClick={() => onOpenReader(paper)}
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-500/20 transition-all"
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Open Reader</span>
+                    </button>
+                  ) : (
+                    <a
+                      href={paper.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/60 transition-all"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span>Read on Publisher</span>
+                    </a>
+                  )}
                 </div>
               </div>
             );

@@ -16,6 +16,13 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
     <div className="w-full h-full bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between selection:bg-indigo-500/30 overflow-hidden">
       {/* Scrollable Main Content Area */}
       <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+        {/* Retraction Warning */}
+        {paper.isRetracted && (
+          <div className="flex items-center justify-center bg-red-500/20 text-red-400 font-bold text-xs uppercase tracking-widest py-1.5 px-3 rounded-xl border border-red-500/30 mb-2">
+            🚨 Retracted Paper
+          </div>
+        )}
+
         {/* Source Badge & Date */}
         <div className="flex items-center justify-between gap-2">
           <span className="px-3 py-1 rounded-full text-xs font-semibold tracking-wide bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -36,6 +43,26 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
         <div className="flex items-center gap-1.5 text-xs text-slate-300 line-clamp-1">
           <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <span className="font-medium text-slate-300">{paper.authors.join(', ')}</span>
+        </div>
+
+        {/* High-Signal Contextual Metadata Ribbon */}
+        <div className="flex flex-wrap gap-2 pt-1 pb-2">
+          {paper.citationCount != null && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+              ⭐ {paper.citationCount} Citations
+            </span>
+          )}
+          {paper.primaryInstitution && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700/60 max-w-[200px] truncate">
+              🏛️ <span className="truncate">{paper.primaryInstitution}</span>
+              {paper.primaryInstitutionCountry && <span className="text-slate-500">, {paper.primaryInstitutionCountry}</span>}
+            </span>
+          )}
+          {paper.documentType && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              🔓 {paper.oaStatus ? `${paper.oaStatus.charAt(0).toUpperCase() + paper.oaStatus.slice(1)} OA` : 'OA'} • {paper.documentType}
+            </span>
+          )}
         </div>
 
         {/* Abstract Box */}
@@ -102,7 +129,7 @@ export function PaperCardItem({ paper, onSaveAndRead, isTopCard }: PaperCardItem
             className="flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-semibold shadow-lg shadow-indigo-500/25 transition-all"
           >
             <BookOpen className="w-4 h-4" />
-            <span>Save & Deep Read</span>
+            <span>{paper.hasContent ? 'Save & Deep Read' : 'Save & Read on Publisher ↗'}</span>
           </button>
         )}
       </div>

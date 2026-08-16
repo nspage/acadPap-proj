@@ -91,9 +91,9 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
   }
 
   return (
-    <div className="flex flex-col items-center w-full max-w-md mx-auto px-4 py-4">
+    <div className="flex flex-col items-center w-full max-w-2xl mx-auto px-4 py-4">
       {/* Card Stack Container */}
-      <div className="relative w-full h-[520px] flex items-center justify-center">
+      <div className="relative w-full min-h-[480px] h-[65vh] max-h-[600px] md:h-[75vh] md:max-h-[750px] flex items-center justify-center">
         <AnimatePresence mode="popLayout">
           {deck.slice(0, 3).map((paper, index) => {
             const isTop = index === 0;

@@ -1,112 +1,42 @@
 import { useState, useEffect } from 'react';
 import { PaperCard, TextSelectionContext } from '../../types';
-import { getCachedPaperPdf } from '../../lib/db';
-import { pdfjs } from '../../lib/pdfWorker';
-import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink } from 'lucide-react';
+import { fetchStructuredContent, ContentResult } from '../../services/openalex-content';
+import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink, AlertCircle, TrendingUp, Globe, Landmark, Link, AlertTriangle } from 'lucide-react';
 
 interface ReaderModeViewProps {
   paper: PaperCard;
-  resolvedPdfUrl?: string | null;
   onTextSelected: (selection: TextSelectionContext) => void;
-  onSwitchToOriginalPdf?: () => void;
 }
 
-export function ReaderModeView({ paper, resolvedPdfUrl, onTextSelected, onSwitchToOriginalPdf }: ReaderModeViewProps) {
-  const [extractedPages, setExtractedPages] = useState<string[]>([]);
-  const [isExtracting, setIsExtracting] = useState<boolean>(true);
+export function ReaderModeView({ paper, onTextSelected }: ReaderModeViewProps) {
+  const [content, setContent] = useState<ContentResult | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [loadError, setLoadError] = useState<boolean>(false);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
 
   useEffect(() => {
     let active = true;
-    setIsExtracting(true);
+    setIsLoading(true);
+    setLoadError(false);
 
-    async function processPdfText() {
-      const activePdfUrl = resolvedPdfUrl || paper.pdfUrl;
-      if (!activePdfUrl) {
-        setIsExtracting(false);
-        return;
-      }
-
-      try {
-        let arrayBuffer: ArrayBuffer | null = null;
-        const cachedBlob = await getCachedPaperPdf(paper.id);
-
-        if (cachedBlob) {
-          arrayBuffer = await cachedBlob.arrayBuffer();
-        } else {
-          const targetFetchUrl = activePdfUrl.includes('export.arxiv.org') || activePdfUrl.includes('unpaywall.org')
-            ? activePdfUrl
-            : `/api/proxy?url=${encodeURIComponent(activePdfUrl)}`;
-          const res = await fetch(targetFetchUrl);
-          if (res.ok) {
-            arrayBuffer = await res.arrayBuffer();
-          }
-        }
-
-        if (!arrayBuffer || !active) {
-          setIsExtracting(false);
-          return;
-        }
-
-        // Validate %PDF header magic bytes
-        const header = String.fromCharCode(...new Uint8Array(arrayBuffer.slice(0, 5)));
-        if (!header.startsWith('%PDF')) {
-          setIsExtracting(false);
-          return;
-        }
-
-        // Extract raw text using PDF.js API
-        const loadingTask = pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) });
-        const pdf = await loadingTask.promise;
-        const pagesText: string[] = [];
-
-        for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
-          if (!active) return;
-          const page = await pdf.getPage(i);
-          const content = await page.getTextContent();
-          
-          let lastY: number | null = null;
-          let pageStr = '';
-
-          for (const item of content.items as any[]) {
-            if (!item || typeof item.str !== 'string') continue;
-            const currentY = Array.isArray(item.transform) ? item.transform[5] : null;
-            
-            if (lastY !== null && currentY !== null && Math.abs(currentY - lastY) > 8) {
-              pageStr += '\n\n';
-            } else if (pageStr.length > 0 && !pageStr.endsWith(' ') && !item.str.startsWith(' ')) {
-              pageStr += ' ';
-            }
-            pageStr += item.str;
-            if (currentY !== null) {
-              lastY = currentY;
-            }
-          }
-
-          const cleanedText = pageStr
-            .replace(/-\s+\n/g, '')
-            .replace(/\s+/g, ' ')
-            .trim();
-
-          if (cleanedText) {
-            pagesText.push(cleanedText);
-          }
-        }
-
-        if (active) {
-          setExtractedPages(pagesText);
-          setIsExtracting(false);
-        }
-      } catch (err: any) {
+    fetchStructuredContent(paper.id)
+      .then(result => {
         if (!active) return;
-        console.warn('Reader Mode text extraction notice:', err);
-        setIsExtracting(false);
-      }
-    }
+        if (result && result.sections.length > 0) {
+          setContent(result);
+        } else {
+          setLoadError(true);
+        }
+        setIsLoading(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setLoadError(true);
+        setIsLoading(false);
+      });
 
-    processPdfText();
     return () => { active = false; };
-  }, [paper.id, paper.pdfUrl, resolvedPdfUrl]);
+  }, [paper.id]);
 
   const handleSelection = () => {
     const sel = window.getSelection();
@@ -145,15 +75,6 @@ export function ReaderModeView({ paper, resolvedPdfUrl, onTextSelected, onSwitch
             <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
             <span>Reader Mode</span>
           </span>
-
-          {onSwitchToOriginalPdf && (
-            <button
-              onClick={onSwitchToOriginalPdf}
-              className="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-            >
-              Original PDF View
-            </button>
-          )}
         </div>
 
         {/* Typography Controls */}
@@ -181,13 +102,20 @@ export function ReaderModeView({ paper, resolvedPdfUrl, onTextSelected, onSwitch
       </div>
 
       {/* Main Single-Column Reader Typography Body */}
-      <div 
+      <div
         className={`reader-mode-content w-full bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-2xl text-slate-200 selection:bg-indigo-500/40 selection:text-white ${fontClass}`}
         onMouseUp={handleSelection}
         onTouchEnd={handleSelection}
       >
         {/* Metadata Header */}
-        <div className="border-b border-slate-800 pb-6 mb-8 space-y-4">
+        <div className="border-b border-slate-800 pb-8 mb-8 space-y-5">
+          {paper.isRetracted && (
+            <div className="flex items-center gap-2 bg-red-500/20 text-red-400 font-bold text-xs uppercase tracking-widest py-2 px-4 rounded-xl border border-red-500/30">
+              <AlertTriangle className="w-4 h-4" />
+              This paper has been retracted
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
               {paper.source}
@@ -202,9 +130,58 @@ export function ReaderModeView({ paper, resolvedPdfUrl, onTextSelected, onSwitch
             {paper.title}
           </h1>
 
-          <div className="flex items-center gap-2 text-xs text-slate-400">
-            <User className="w-4 h-4 text-indigo-400 shrink-0" />
-            <span className="font-medium text-slate-300">{paper.authors.join(', ')}</span>
+          {/* Full Authorships */}
+          <div className="space-y-2">
+            {paper.fullAuthorships && paper.fullAuthorships.length > 0 ? (
+              paper.fullAuthorships.map((auth, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-xs text-slate-400">
+                  <User className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-medium text-slate-200">{auth.name}</span>
+                    {auth.institution && (
+                      <span className="text-slate-500"> • {auth.institution} {auth.countryCode && `(${auth.countryCode})`}</span>
+                    )}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="flex items-center gap-2 text-xs text-slate-400">
+                <User className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span className="font-medium text-slate-300">{paper.authors.join(', ')}</span>
+              </div>
+            )}
+          </div>
+
+          {/* Deep Impact & Context */}
+          <div className="flex flex-wrap gap-2 pt-2">
+            {(paper.citationCount != null || paper.fwci != null) && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-950/60 border border-slate-800 text-slate-300">
+                <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+                {paper.citationCount ?? 0} Citations
+                {paper.fwci != null && <span className="text-slate-500 border-l border-slate-700 ml-1.5 pl-1.5">FWCI: {paper.fwci.toFixed(2)}</span>}
+              </span>
+            )}
+
+            {paper.referencedWorksCount != null && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-950/60 border border-slate-800 text-slate-300">
+                <Link className="w-3.5 h-3.5 text-slate-400" />
+                {paper.referencedWorksCount} References
+              </span>
+            )}
+
+            {paper.funders && paper.funders.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-950/60 border border-slate-800 text-slate-300">
+                <Landmark className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="truncate max-w-[200px]">Funded by {paper.funders[0]}</span>
+              </span>
+            )}
+
+            {paper.sdgs && paper.sdgs.length > 0 && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-slate-950/60 border border-slate-800 text-slate-300">
+                <Globe className="w-3.5 h-3.5 text-blue-400" />
+                <span className="truncate max-w-[200px]">{paper.sdgs[0]}</span>
+              </span>
+            )}
           </div>
         </div>
 
@@ -218,51 +195,47 @@ export function ReaderModeView({ paper, resolvedPdfUrl, onTextSelected, onSwitch
           </p>
         </div>
 
-        {/* Extracted PDF Body Content */}
-        {isExtracting ? (
+        {/* Structured Content Body */}
+        {isLoading ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-3">
             <Loader2 className="w-7 h-7 text-indigo-400 animate-spin" />
-            <p className="text-xs text-slate-400 font-mono">Extracting & formatting clean document text...</p>
+            <p className="text-xs text-slate-400 font-mono">Fetching structured document content...</p>
           </div>
-        ) : extractedPages.length > 0 ? (
-          <div className="space-y-8 font-serif">
-            {extractedPages.map((pageText, idx) => (
-              <div key={idx} className="space-y-4">
-                <div className="flex items-center space-x-3 text-slate-500 text-xs font-mono border-b border-slate-800/60 pb-1">
-                  <span>Section / Page {idx + 1}</span>
-                </div>
-                <p className="text-slate-200 leading-relaxed whitespace-pre-wrap">
-                  {pageText}
-                </p>
-              </div>
-            ))}
+        ) : loadError || !content ? (
+          <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
+            <div className="flex items-center justify-center gap-2 text-amber-400 text-sm font-semibold">
+              <AlertCircle className="w-4 h-4" />
+              <span>Structured content unavailable</span>
+            </div>
+            <p className="text-xs text-slate-400">
+              The full text for this paper could not be retrieved from OpenAlex. You can read it on the publisher's site.
+            </p>
+            <a
+              href={paper.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors"
+            >
+              <span>Open Publisher Page</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
         ) : (
-          <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
-            <p className="text-xs text-slate-400">
-              {(resolvedPdfUrl || paper.pdfUrl)
-                ? 'Original PDF stream parsing incomplete or restricted. You can view the original PDF canvas or open the publisher page.'
-                : 'Direct PDF stream link is unavailable for this repository.'}
-            </p>
-            <div className="flex justify-center gap-3 pt-2">
-              {onSwitchToOriginalPdf && (resolvedPdfUrl || paper.pdfUrl) && (
-                <button
-                  onClick={onSwitchToOriginalPdf}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 transition-colors"
-                >
-                  Try Original PDF View
-                </button>
-              )}
-              <a
-                href={paper.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors"
-              >
-                <span>Open Publisher Landing Page</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            </div>
+          <div className="space-y-8 font-serif">
+            {content.sections.map((section, idx) => (
+              <div key={idx} className="space-y-4">
+                {section.heading && (
+                  <h2 className="text-lg font-bold text-white tracking-tight border-b border-slate-800/60 pb-2">
+                    {section.heading}
+                  </h2>
+                )}
+                {section.paragraphs.map((p, pIdx) => (
+                  <p key={pIdx} className="text-slate-200 leading-relaxed">
+                    {p}
+                  </p>
+                ))}
+              </div>
+            ))}
           </div>
         )}
       </div>
