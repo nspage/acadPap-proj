@@ -18,7 +18,10 @@ export function Header({
   savedCount,
 }: HeaderProps) {
   return (
-    <header className="sticky top-0 z-30 w-full bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-4 py-3">
+    <header
+      className="sticky top-0 z-30 w-full bg-slate-950/80 backdrop-blur-md border-b border-slate-800/80 px-4 py-3"
+      style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+    >
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         {/* Brand Logo & Name */}
         <div className="flex items-center space-x-3">
