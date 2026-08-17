@@ -1,60 +1,100 @@
 import { db } from '../lib/db';
+import { ContentFetchResult, ContentResult, ParsedSection } from '../types';
 
 const OPENALEX_API_KEY = 'ScDyE5FFaburyQ6XWmb7dY';
+const CONTENT_TIMEOUT_MS = 20_000;
 
-export interface ParsedSection {
-  heading: string;
-  paragraphs: string[];
-}
-
-export interface ContentResult {
-  abstract?: string;
-  sections: ParsedSection[];
-}
+export type { ContentResult, ParsedSection };
 
 /**
  * Fetch and parse structured fulltext from OpenAlex Content API.
  * Uses GROBID TEI XML — pre-parsed by OpenAlex, structured into
  * sections/headings/paragraphs. No PDF.js, no CORS proxy, no third-party servers.
+ * Cache only after kind === 'ok'. Callers must not invoke this for hint-only cards.
  */
-export async function fetchStructuredContent(paperId: string): Promise<ContentResult | null> {
-  // paperId format: "openalex:W12345" → extract "W12345"
+export async function fetchStructuredContent(
+  paperId: string,
+  opts?: { bypassCache?: boolean; signal?: AbortSignal },
+): Promise<ContentFetchResult> {
   const workId = paperId.replace('openalex:', '');
 
-  // 1. Check IndexedDB cache
-  const cached = await db.contentCache.get(paperId);
-  if (cached?.xmlText) {
-    return parseGrobidXml(cached.xmlText);
+  if (!opts?.bypassCache) {
+    const cached = await db.contentCache.get(paperId);
+    if (cached?.xmlText) {
+      const parsed = parseGrobidXml(cached.xmlText);
+      if (parsed.sections.length > 0) {
+        return { ok: true, kind: 'ok', content: parsed };
+      }
+      await db.contentCache.delete(paperId);
+    }
   }
 
-  // 2. Fetch from Content API
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CONTENT_TIMEOUT_MS);
+  const onExternalAbort = () => controller.abort();
+  opts?.signal?.addEventListener('abort', onExternalAbort);
+
   try {
     const url = `https://content.openalex.org/works/${workId}.grobid-xml?api_key=${OPENALEX_API_KEY}`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    let res: Response;
+    try {
+      res = await fetch(url, { signal: controller.signal });
+    } catch (err) {
+      return {
+        ok: false,
+        kind: 'transient',
+        message: controller.signal.aborted
+          ? (opts?.signal?.aborted ? 'aborted' : 'timeout')
+          : err instanceof Error ? err.message : 'network',
+      };
+    }
 
-    // 3. Decompress the gzip stream from OpenAlex
-    const ds = new DecompressionStream('gzip');
-    const decompressedStream = res.body?.pipeThrough(ds);
-    if (!decompressedStream) return null;
+    if (res.status === 404) return { ok: false, kind: 'not_found', status: 404 };
+    if (res.status === 429) return { ok: false, kind: 'quota', status: 429 };
+    if (!res.ok) {
+      return { ok: false, kind: 'transient', status: res.status, message: `HTTP ${res.status}` };
+    }
 
-    const decompressedRes = new Response(decompressedStream);
-    let xmlText = await decompressedRes.text();
-    if (!xmlText || xmlText.length < 100) return null;
+    let xmlText: string;
+    try {
+      const ds = new DecompressionStream('gzip');
+      const decompressedStream = res.body?.pipeThrough(ds);
+      if (!decompressedStream) {
+        return { ok: false, kind: 'transient', message: 'empty body stream' };
+      }
+      xmlText = await new Response(decompressedStream).text();
+    } catch (err) {
+      return {
+        ok: false,
+        kind: 'transient',
+        message: controller.signal.aborted
+          ? (opts?.signal?.aborted ? 'aborted' : 'timeout')
+          : 'decompress failed',
+      };
+    }
 
-    // 4. Cache raw XML
+    if (!xmlText || xmlText.length < 100) {
+      await db.contentCache.delete(paperId);
+      return { ok: false, kind: 'not_found', status: 200 };
+    }
+
+    const parsed = parseGrobidXml(xmlText);
+    if (parsed.sections.length === 0) {
+      await db.contentCache.delete(paperId);
+      return { ok: false, kind: 'not_found', status: 200 };
+    }
+
     await db.contentCache.put({
       paperId,
       xmlText,
       cachedAt: Date.now(),
-      sizeBytes: xmlText.length
+      sizeBytes: xmlText.length,
     });
 
-    // 5. Parse and return
-    return parseGrobidXml(xmlText);
-  } catch (err) {
-    console.warn('OpenAlex Content API fetch failed:', err);
-    return null;
+    return { ok: true, kind: 'ok', content: parsed };
+  } finally {
+    clearTimeout(timeout);
+    opts?.signal?.removeEventListener('abort', onExternalAbort);
   }
 }
 

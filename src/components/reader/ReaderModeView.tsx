@@ -1,42 +1,88 @@
 import { useState, useEffect } from 'react';
-import { PaperCard, TextSelectionContext } from '../../types';
-import { fetchStructuredContent, ContentResult } from '../../services/openalex-content';
-import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink, AlertCircle, TrendingUp, Globe, Landmark, Link, AlertTriangle } from 'lucide-react';
+import {
+  ContentResult,
+  PaperCard,
+  TextSelectionContext,
+  UnreadableStampPatch,
+  isHintOnly,
+  publisherUrl,
+  showsNoInAppText,
+} from '../../types';
+import { fetchStructuredContent } from '../../services/openalex-content';
+import { liftUnreadableStamp, stampUnreadable } from '../../services/aim-store';
+import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink, AlertCircle, TrendingUp, Globe, Landmark, Link, AlertTriangle, RotateCcw } from 'lucide-react';
+import { NoInAppTextMark } from '../common/NoInAppTextMark';
+
+type BodyState =
+  | { status: 'loading' }
+  | { status: 'ready'; content: ContentResult }
+  | { status: 'unreadable' }
+  | { status: 'quota' }
+  | { status: 'broken' };
 
 interface ReaderModeViewProps {
   paper: PaperCard;
   onTextSelected: (selection: TextSelectionContext) => void;
+  onPaperUpdated?: (paperId: string, patch: UnreadableStampPatch) => void;
 }
 
-export function ReaderModeView({ paper, onTextSelected }: ReaderModeViewProps) {
-  const [content, setContent] = useState<ContentResult | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [loadError, setLoadError] = useState<boolean>(false);
+export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: ReaderModeViewProps) {
+  const [bodyState, setBodyState] = useState<BodyState>({ status: 'loading' });
+  const [retryToken, setRetryToken] = useState(0);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
+  const landingUrl = publisherUrl(paper);
 
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
-    setLoadError(false);
+    const controller = new AbortController();
+    if (isHintOnly(paper)) {
+      setBodyState({ status: 'unreadable' });
+      return () => {
+        active = false;
+        controller.abort();
+      };
+    }
 
-    fetchStructuredContent(paper.id)
-      .then(result => {
+    setBodyState({ status: 'loading' });
+
+    fetchStructuredContent(paper.id, {
+      bypassCache: paper.unreadableStampedAt != null,
+      signal: controller.signal,
+    })
+      .then(async (result) => {
         if (!active) return;
-        if (result && result.sections.length > 0) {
-          setContent(result);
-        } else {
-          setLoadError(true);
+        if (result.ok && result.kind === 'ok') {
+          setBodyState({ status: 'ready', content: result.content });
+          if (paper.unreadableStampedAt != null) {
+            const patch = await liftUnreadableStamp(paper.id);
+            if (active) onPaperUpdated?.(paper.id, patch);
+          }
+          return;
         }
-        setIsLoading(false);
+        if (result.kind === 'not_found') {
+          const patch = await stampUnreadable(paper.id);
+          if (!active) return;
+          onPaperUpdated?.(paper.id, patch);
+          setBodyState({ status: 'unreadable' });
+          return;
+        }
+        if (result.kind === 'quota') {
+          setBodyState({ status: 'quota' });
+          return;
+        }
+        if (result.message === 'aborted') return;
+        setBodyState({ status: 'broken' });
       })
       .catch(() => {
         if (!active) return;
-        setLoadError(true);
-        setIsLoading(false);
+        setBodyState({ status: 'broken' });
       });
 
-    return () => { active = false; };
-  }, [paper.id]);
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [paper.id, retryToken]);
 
   const handleSelection = () => {
     const sel = window.getSelection();
@@ -117,9 +163,12 @@ export function ReaderModeView({ paper, onTextSelected }: ReaderModeViewProps) {
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-              {paper.source}
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                {paper.source}
+              </span>
+              {showsNoInAppText(paper) && <NoInAppTextMark />}
+            </div>
             <span className="flex items-center text-xs text-slate-400 gap-1 font-mono">
               <Calendar className="w-3.5 h-3.5 text-slate-500" />
               {paper.publishedDate || 'Preprint'}
@@ -196,33 +245,54 @@ export function ReaderModeView({ paper, onTextSelected }: ReaderModeViewProps) {
         </div>
 
         {/* Structured Content Body */}
-        {isLoading ? (
+        {bodyState.status === 'loading' ? (
           <div className="flex flex-col items-center justify-center p-12 space-y-3">
             <Loader2 className="w-7 h-7 text-indigo-400 animate-spin" />
             <p className="text-xs text-slate-400 font-mono">Fetching structured document content...</p>
           </div>
-        ) : loadError || !content ? (
+        ) : bodyState.status === 'unreadable' ? (
+          <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
+            <div className="flex items-center justify-center">
+              <NoInAppTextMark />
+            </div>
+            <p className="text-xs text-slate-400">There is no clean article view for this paper.</p>
+            {landingUrl && (
+              <a
+                href={landingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors"
+              >
+                <span>Open publisher</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+          </div>
+        ) : bodyState.status === 'quota' ? (
           <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
             <div className="flex items-center justify-center gap-2 text-amber-400 text-sm font-semibold">
               <AlertCircle className="w-4 h-4" />
-              <span>Structured content unavailable</span>
+              <span>Cap is used, come back later.</span>
             </div>
-            <p className="text-xs text-slate-400">
-              The full text for this paper could not be retrieved from OpenAlex. You can read it on the publisher's site.
-            </p>
-            <a
-              href={paper.url}
-              target="_blank"
-              rel="noopener noreferrer"
+          </div>
+        ) : bodyState.status === 'broken' ? (
+          <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
+            <div className="flex items-center justify-center gap-2 text-amber-400 text-sm font-semibold">
+              <AlertCircle className="w-4 h-4" />
+              <span>Couldn't get the text</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRetryToken((n) => n + 1)}
               className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors"
             >
-              <span>Open Publisher Page</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Retry</span>
+            </button>
           </div>
         ) : (
           <div className="space-y-8 font-serif">
-            {content.sections.map((section, idx) => (
+            {bodyState.content.sections.map((section, idx) => (
               <div key={idx} className="space-y-4">
                 {section.heading && (
                   <h2 className="text-lg font-bold text-white tracking-tight border-b border-slate-800/60 pb-2">

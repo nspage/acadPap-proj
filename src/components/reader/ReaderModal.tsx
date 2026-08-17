@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { PaperCard, PaperNote, TextSelectionContext } from '../../types';
+import { PaperCard, PaperNote, TextSelectionContext, UnreadableStampPatch, publisherUrl, showsNoInAppText } from '../../types';
+import { NoInAppTextMark } from '../common/NoInAppTextMark';
 import { ReaderModeView } from './ReaderModeView';
 import { db } from '../../lib/db';
 import { fetchDictionaryDefinition, fetchContextualExplanation } from '../../services/explainer';
@@ -9,9 +10,10 @@ interface ReaderModalProps {
   paper: PaperCard | null;
   apiKey: string;
   onClose: () => void;
+  onPaperUpdated?: (paperId: string, patch: UnreadableStampPatch) => void;
 }
 
-export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
+export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated }: ReaderModalProps) {
   const [activeTab, setActiveTab] = useState<'reader' | 'notes'>('reader');
 
   const [note, setNote] = useState<PaperNote>({
@@ -42,6 +44,8 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
   }, [paper]);
 
   if (!paper) return null;
+
+  const landingUrl = publisherUrl(paper);
 
   const handleTextSelected = async (selection: TextSelectionContext) => {
     setSelectedContext(selection);
@@ -104,22 +108,27 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
       <div className="relative w-full max-w-5xl h-[92vh] bg-slate-900 border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
         {/* Modal Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/40">
-          <div className="pr-4">
-            <h2 className="text-base font-bold text-white line-clamp-1">{paper.title}</h2>
+          <div className="pr-4 min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-base font-bold text-white line-clamp-1">{paper.title}</h2>
+              {showsNoInAppText(paper) && <NoInAppTextMark />}
+            </div>
             <p className="text-xs text-slate-400">{paper.source} • {paper.authors.slice(0, 2).join(', ')}</p>
           </div>
 
           <div className="flex items-center space-x-3 shrink-0">
-            <a
-              href={paper.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700/60 font-medium transition-colors"
-              title="Open Publisher Landing Page"
-            >
-              <span>Publisher Page</span>
-              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-            </a>
+            {landingUrl && (
+              <a
+                href={landingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700/60 font-medium transition-colors"
+                title="Open Publisher Landing Page"
+              >
+                <span>Publisher Page</span>
+                <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              </a>
+            )}
 
             {/* View Tabs */}
             <div className="flex p-1 bg-slate-800/80 rounded-xl border border-slate-700/60">
@@ -159,6 +168,7 @@ export function ReaderModal({ paper, apiKey, onClose }: ReaderModalProps) {
               <ReaderModeView
                 paper={paper}
                 onTextSelected={handleTextSelected}
+                onPaperUpdated={onPaperUpdated}
               />
             </div>
           ) : (

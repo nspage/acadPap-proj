@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { PaperCard, PaperNote } from '../../types';
+import { PaperCard, PaperNote, showsNoInAppText } from '../../types';
 import { exportAllNotesAsMarkdown } from '../../utils/export';
-import { BookOpen, Download, Trash2, ExternalLink, Tag, Sparkles, FileText, Quote, Book } from 'lucide-react';
-import { db } from '../../lib/db';
+import { BookOpen, Download, Trash2, Sparkles, FileText, Quote, Book } from 'lucide-react';
+import { NoInAppTextMark } from '../common/NoInAppTextMark';
 
 interface JournalViewProps {
   savedPapers: PaperCard[];
@@ -81,7 +81,7 @@ export function JournalView({ savedPapers, notes, onOpenReader, onRemovePaper }:
           <Sparkles className="w-8 h-8 text-indigo-400 mx-auto mb-3" />
           <h3 className="text-base font-semibold text-white mb-1">Your Journal is Empty</h3>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Swipe right or click "Save & Deep Read" on discovery cards to curate papers into your library.
+            Swipe right to save papers into your library.
           </p>
         </div>
       ) : (
@@ -99,10 +99,13 @@ export function JournalView({ savedPapers, notes, onOpenReader, onRemovePaper }:
               >
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-                      {paper.source}
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-500">{paper.publishedDate}</span>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                        {paper.source}
+                      </span>
+                      {showsNoInAppText(paper) && <NoInAppTextMark />}
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-500 shrink-0">{paper.publishedDate}</span>
                   </div>
 
                   <h3 className="text-base font-bold text-white line-clamp-2 mb-2 leading-snug">
@@ -143,25 +146,13 @@ export function JournalView({ savedPapers, notes, onOpenReader, onRemovePaper }:
                     <Trash2 className="w-4 h-4" />
                   </button>
 
-                  {paper.hasContent ? (
-                    <button
-                      onClick={() => onOpenReader(paper)}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-500/20 transition-all"
-                    >
-                      <BookOpen className="w-3.5 h-3.5" />
-                      <span>Open Reader</span>
-                    </button>
-                  ) : (
-                    <a
-                      href={paper.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium border border-slate-700/60 transition-all"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>Read on Publisher</span>
-                    </a>
-                  )}
+                  <button
+                    onClick={() => onOpenReader(paper)}
+                    className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shadow-md shadow-indigo-500/20 transition-all"
+                  >
+                    <BookOpen className="w-3.5 h-3.5" />
+                    <span>Open Reader</span>
+                  </button>
                 </div>
               </div>
             );
