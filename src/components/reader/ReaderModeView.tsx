@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ContentResult,
   PaperCard,
@@ -8,6 +8,8 @@ import {
   publisherUrl,
   showsNoInAppText,
 } from '../../types';
+import { db } from '../../lib/db';
+import { readingPlaceAttr, restorePlace } from '../../lib/reading-place';
 import { fetchStructuredContent } from '../../services/openalex-content';
 import { liftUnreadableStamp, stampUnreadable } from '../../services/aim-store';
 import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink, AlertCircle, TrendingUp, Globe, Landmark, Link, AlertTriangle, RotateCcw } from 'lucide-react';
@@ -30,6 +32,7 @@ export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: Reader
   const [bodyState, setBodyState] = useState<BodyState>({ status: 'loading' });
   const [retryToken, setRetryToken] = useState(0);
   const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
+  const contentRef = useRef<HTMLDivElement>(null);
   const landingUrl = publisherUrl(paper);
 
   useEffect(() => {
@@ -83,6 +86,22 @@ export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: Reader
       controller.abort();
     };
   }, [paper.id, retryToken]);
+
+  useEffect(() => {
+    if (bodyState.status !== 'ready') return;
+    let cancelled = false;
+    db.readingPlaces.get(paper.id).then((row) => {
+      const place = row?.place;
+      if (cancelled || !place) return;
+      requestAnimationFrame(() => {
+        if (cancelled || !contentRef.current) return;
+        restorePlace(contentRef.current, place);
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [paper.id, bodyState.status]);
 
   const handleSelection = () => {
     const sel = window.getSelection();
@@ -149,6 +168,7 @@ export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: Reader
 
       {/* Main Single-Column Reader Typography Body */}
       <div
+        ref={contentRef}
         className={`reader-mode-content w-full bg-slate-900/60 border border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-2xl text-slate-200 selection:bg-indigo-500/40 selection:text-white ${fontClass}`}
         onMouseUp={handleSelection}
         onTouchEnd={handleSelection}
@@ -300,7 +320,11 @@ export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: Reader
                   </h2>
                 )}
                 {section.paragraphs.map((p, pIdx) => (
-                  <p key={pIdx} className="text-slate-200 leading-relaxed">
+                  <p
+                    key={pIdx}
+                    data-reading-place={readingPlaceAttr(idx, pIdx)}
+                    className="text-slate-200 leading-relaxed"
+                  >
                     {p}
                   </p>
                 ))}
