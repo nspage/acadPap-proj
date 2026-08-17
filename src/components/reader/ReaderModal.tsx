@@ -1,47 +1,62 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { PaperCard, PaperNote, TextSelectionContext, UnreadableStampPatch, publisherUrl, showsNoInAppText } from '../../types';
 import { NoInAppTextMark } from '../common/NoInAppTextMark';
+import { SpokenNotice } from '../common/SpokenNotice';
 import { ReaderModeView } from './ReaderModeView';
 import { db } from '../../lib/db';
+import { persistNoteNow } from '../../lib/persist-note';
 import { fetchDictionaryDefinition, fetchContextualExplanation } from '../../services/explainer';
-import { X, Sparkles, Book, Save, ExternalLink, Quote, Lightbulb, FileText } from 'lucide-react';
+import { X, Sparkles, Book, Check, ExternalLink, Quote, Lightbulb, FileText } from 'lucide-react';
 
-interface ReaderModalProps {
-  paper: PaperCard | null;
-  apiKey: string;
-  onClose: () => void;
-  onPaperUpdated?: (paperId: string, patch: UnreadableStampPatch) => void;
-}
-
-export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated }: ReaderModalProps) {
-  const [activeTab, setActiveTab] = useState<'reader' | 'notes'>('reader');
-
-  const [note, setNote] = useState<PaperNote>({
+function emptyNote(paperId: string): PaperNote {
+  return {
     id: crypto.randomUUID(),
-    paperId: paper?.id || '',
+    paperId,
     takeaways: '',
     jargonTerms: [],
     synthesis: '',
     quotes: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
-  });
+  };
+}
+
+interface ReaderModalProps {
+  paper: PaperCard | null;
+  apiKey: string;
+  onClose: () => void;
+  onPaperUpdated?: (paperId: string, patch: UnreadableStampPatch) => void;
+  onImpliedSave: (paper: PaperCard) => Promise<void>;
+}
+
+export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated, onImpliedSave }: ReaderModalProps) {
+  const [activeTab, setActiveTab] = useState<'reader' | 'notes'>('reader');
+
+  const [note, setNote] = useState<PaperNote>(() => emptyNote(paper?.id || ''));
+  const noteRef = useRef(note);
+  noteRef.current = note;
+  const persistChain = useRef(Promise.resolve());
 
   const [selectedContext, setSelectedContext] = useState<TextSelectionContext | null>(null);
   const [definition, setDefinition] = useState<string | null>(null);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState<boolean>(false);
-  const [isSavingNote, setIsSavingNote] = useState<boolean>(false);
+  const [persistFailed, setPersistFailed] = useState(false);
+  const [notePersisted, setNotePersisted] = useState(false);
 
   useEffect(() => {
     if (!paper) return;
-
+    let active = true;
+    setNote(emptyNote(paper.id));
+    setPersistFailed(false);
+    setNotePersisted(false);
     db.notes.where('paperId').equals(paper.id).first().then((existingNote) => {
-      if (existingNote) {
-        setNote(existingNote);
-      }
+      if (!active || !existingNote) return;
+      setNote(existingNote);
+      setNotePersisted(true);
     });
-  }, [paper]);
+    return () => { active = false; };
+  }, [paper?.id]);
 
   if (!paper) return null;
 
@@ -71,36 +86,50 @@ export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated }: ReaderMo
     setIsExplaining(false);
   };
 
+  const persistLatest = (next: PaperNote) => {
+    persistChain.current = persistChain.current.then(async () => {
+      try {
+        if (next.paperId !== paper.id) return;
+        const result = await persistNoteNow(next, paper);
+        if (noteRef.current.updatedAt !== next.updatedAt) return;
+        if (!result.ok) {
+          setPersistFailed(true);
+          setNotePersisted(false);
+          return;
+        }
+        setPersistFailed(false);
+        setNotePersisted(true);
+        if (result.impliedSave) await onImpliedSave(paper);
+      } catch {
+        setPersistFailed(true);
+        setNotePersisted(false);
+      }
+    });
+  };
+
+  const writeNote = (patch: Partial<PaperNote>) => {
+    const next = { ...noteRef.current, ...patch, updatedAt: Date.now() };
+    setNote(next);
+    persistLatest(next);
+  };
+
+  const retryPersist = () => {
+    persistLatest({ ...noteRef.current, updatedAt: Date.now() });
+  };
+
   const handleAddJargonTerm = (term: string, explanation: string) => {
-    setNote((prev) => ({
-      ...prev,
+    writeNote({
       jargonTerms: [
-        ...prev.jargonTerms,
+        ...noteRef.current.jargonTerms,
         { term, explanation, timestamp: Date.now() },
       ],
-      updatedAt: Date.now(),
-    }));
+    });
   };
 
   const handleAddQuote = (text: string) => {
-    setNote((prev) => ({
-      ...prev,
-      quotes: [...prev.quotes, { text, createdAt: Date.now() }],
-      updatedAt: Date.now(),
-    }));
-  };
-
-  const handleSaveNote = async () => {
-    setIsSavingNote(true);
-    try {
-      const updated = { ...note, updatedAt: Date.now() };
-      await db.notes.put(updated);
-      setNote(updated);
-    } catch (err) {
-      console.error('Failed to save note:', err);
-    } finally {
-      setIsSavingNote(false);
-    }
+    writeNote({
+      quotes: [...noteRef.current.quotes, { text, createdAt: Date.now() }],
+    });
   };
 
   return (
@@ -180,7 +209,7 @@ export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated }: ReaderMo
                 </label>
                 <textarea
                   value={note.takeaways}
-                  onChange={(e) => setNote({ ...note, takeaways: e.target.value })}
+                  onChange={(e) => writeNote({ takeaways: e.target.value })}
                   placeholder="What are the key takeaways from this paper?"
                   className="w-full h-24 p-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50"
                 />
@@ -230,21 +259,24 @@ export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated }: ReaderMo
                 </label>
                 <textarea
                   value={note.synthesis}
-                  onChange={(e) => setNote({ ...note, synthesis: e.target.value })}
+                  onChange={(e) => writeNote({ synthesis: e.target.value })}
                   placeholder="Synthesize how this paper connects to your research or work..."
                   className="w-full h-28 p-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50"
                 />
               </div>
 
+              {persistFailed && (
+                <SpokenNotice
+                  message="Couldn't save the note."
+                  onRetry={retryPersist}
+                />
+              )}
+
               <div className="flex justify-end">
-                <button
-                  onClick={handleSaveNote}
-                  disabled={isSavingNote}
-                  className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white font-medium text-xs shadow-lg shadow-indigo-500/20"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{isSavingNote ? 'Saving...' : 'Save Notes'}</span>
-                </button>
+                <div className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-medium text-xs border border-slate-700/60">
+                  <Check className="w-4 h-4" />
+                  <span>{persistFailed ? 'Not saved' : notePersisted ? 'Saved' : 'Saved as you type'}</span>
+                </div>
               </div>
             </div>
           )}
