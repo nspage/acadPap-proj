@@ -8,6 +8,7 @@ import { persistNoteNow } from '../../lib/persist-note';
 import { persistPlaceNow } from '../../lib/reading-place';
 import { fetchDictionaryDefinition, fetchContextualExplanation } from '../../services/explainer';
 import { X, Sparkles, Book, Check, ExternalLink, Quote, Lightbulb, FileText } from 'lucide-react';
+import { OverlayFrame } from '../common/OverlayFrame';
 
 function emptyNote(paperId: string): PaperNote {
   return {
@@ -149,65 +150,60 @@ export const ReaderModal = forwardRef<ReaderModalHandle, ReaderModalProps>(funct
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="relative w-full max-w-5xl h-[92vh] bg-slate-900 border border-slate-800 rounded-3xl flex flex-col overflow-hidden shadow-2xl">
-        {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-950/40">
-          <div className="pr-4 min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-bold text-white line-clamp-1">{paper.title}</h2>
-              {showsNoInAppText(paper) && <NoInAppTextMark />}
-            </div>
-            <p className="text-xs text-slate-400">{paper.source} • {paper.authors.slice(0, 2).join(', ')}</p>
+    <OverlayFrame
+      onClose={onClose}
+      wide
+      title={
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-bold text-white truncate">{paper.title}</h2>
+            {showsNoInAppText(paper) && <NoInAppTextMark />}
           </div>
-
-          <div className="flex items-center space-x-3 shrink-0">
-            {landingUrl && (
-              <a
-                href={landingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700/60 font-medium transition-colors"
-                title="Open Publisher Landing Page"
-              >
-                <span>Publisher Page</span>
-                <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
-              </a>
-            )}
-
-            {/* View Tabs */}
-            <div className="flex p-1 bg-slate-800/80 rounded-xl border border-slate-700/60">
-              <button
-                onClick={() => setActiveTab('reader')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
-                  activeTab === 'reader' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Reader Mode</span>
-              </button>
-              <button
-                onClick={() => setActiveTab('notes')}
-                className={`px-3 py-1 rounded-lg text-xs font-medium flex items-center gap-1 transition-all ${
-                  activeTab === 'notes' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <FileText className="w-3.5 h-3.5" />
-                <span>Notes</span>
-              </button>
-            </div>
-
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
+          <p className="text-[11px] text-slate-400 truncate">
+            {paper.source} • {paper.authors.slice(0, 2).join(', ')}
+          </p>
         </div>
+      }
+      actions={
+        landingUrl ? (
+          <a
+            href={landingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center min-h-11 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700/60 font-medium shrink-0"
+          >
+            <span className="hidden sm:inline">Publisher</span>
+            <ExternalLink className="w-4 h-4 sm:ml-1.5" />
+          </a>
+        ) : undefined
+      }
+    >
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 shrink-0">
+        <div className="flex p-1 bg-slate-800/80 rounded-xl border border-slate-700/60">
+          <button
+            type="button"
+            onClick={() => setActiveTab('reader')}
+            className={`min-h-9 px-3 rounded-lg text-xs font-medium flex items-center gap-1 ${
+              activeTab === 'reader' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Reader</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('notes')}
+            className={`min-h-9 px-3 rounded-lg text-xs font-medium flex items-center gap-1 ${
+              activeTab === 'notes' ? 'bg-indigo-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5" />
+            <span>Notes</span>
+          </button>
+        </div>
+      </div>
 
-        {/* Main Body */}
-        <div className="flex-1 overflow-hidden relative flex">
+      <div className="flex-1 overflow-hidden relative flex min-h-0">
           <div
             ref={scrollRef}
             className="w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col items-center"
@@ -362,7 +358,6 @@ export const ReaderModal = forwardRef<ReaderModalHandle, ReaderModalProps>(funct
             </div>
           )}
         </div>
-      </div>
-    </div>
+    </OverlayFrame>
   );
 });

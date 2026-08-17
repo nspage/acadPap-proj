@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Loader2, ChevronRight, ChevronLeft, Library, Search, Layers, Compass } from 'lucide-react';
+import { Loader2, ChevronRight, ChevronLeft, Library, Search, Layers } from 'lucide-react';
+import { OverlayFrame } from '../common/OverlayFrame';
 import { 
   fetchDomains, 
   fetchFieldsForDomain, 
@@ -106,18 +107,17 @@ export function RabbitHoleExplorer({ onSelectTopic, onClose }: RabbitHoleExplore
     if (step === 'topics') title = selectedSubfield?.display_name || '';
 
     return (
-      <div className="flex items-center p-4 border-b border-slate-800 bg-slate-900/50">
-        {step !== 'domains' ? (
-          <button onClick={goBack} className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">
+      <div className="flex items-center min-w-0">
+        {step !== 'domains' && (
+          <button
+            type="button"
+            onClick={goBack}
+            className="inline-flex items-center justify-center min-h-11 min-w-11 mr-1 rounded-xl text-slate-300 hover:bg-slate-800"
+          >
             <ChevronLeft className="w-5 h-5" />
           </button>
-        ) : (
-          <Compass className="w-5 h-5 ml-2 text-indigo-400" />
         )}
-        <h3 className="ml-3 font-semibold text-white truncate flex-1">{title}</h3>
-        <button onClick={onClose} className="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors">
-          Cancel
-        </button>
+        <h3 className="font-semibold text-white truncate">{title}</h3>
       </div>
     );
   };
@@ -153,7 +153,7 @@ export function RabbitHoleExplorer({ onSelectTopic, onClose }: RabbitHoleExplore
     }
 
     return (
-      <div className="overflow-y-auto max-h-[60vh] p-2 space-y-1 custom-scrollbar">
+      <div className="overflow-y-auto p-2 space-y-1 custom-scrollbar">
         {items.map((item) => (
           <button
             key={item.id}
@@ -183,27 +183,23 @@ export function RabbitHoleExplorer({ onSelectTopic, onClose }: RabbitHoleExplore
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl flex flex-col">
-        {renderHeader()}
-        
-        <div className="relative overflow-hidden bg-slate-950/30">
-          <AnimatePresence mode="popLayout" custom={direction} initial={false}>
-            <motion.div
-              key={step}
-              custom={direction}
-              variants={variants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-              className="w-full"
-            >
-              {renderList()}
-            </motion.div>
-          </AnimatePresence>
-        </div>
+    <OverlayFrame onClose={onClose} title={renderHeader()}>
+      <div className="relative flex-1 min-h-0 overflow-hidden bg-slate-950/30">
+        <AnimatePresence mode="popLayout" custom={direction} initial={false}>
+          <motion.div
+            key={step}
+            custom={direction}
+            variants={variants}
+            initial="enter"
+            animate="center"
+            exit="exit"
+            transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+            className="w-full h-full overflow-y-auto"
+          >
+            {renderList()}
+          </motion.div>
+        </AnimatePresence>
       </div>
-    </div>
+    </OverlayFrame>
   );
 }

@@ -574,7 +574,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100 selection:bg-indigo-500/30 selection:text-indigo-200 pb-[env(safe-area-inset-bottom)]">
       <Header
         activeTab={activeTab}
         onTabChange={setActiveTab}
