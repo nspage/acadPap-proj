@@ -114,3 +114,56 @@ export interface JournalTombstone {
   id: string;
   deletedAt: number;
 }
+
+export type PileStatus = 'ready' | 'failed' | 'quota' | 'caught_up';
+
+export class FeedError extends Error {
+  constructor(
+    message: string,
+    readonly kind: 'quota' | 'transient',
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'FeedError';
+  }
+}
+
+export function isFeedError(err: unknown): err is FeedError {
+  return err instanceof FeedError;
+}
+
+export interface ParsedSection {
+  heading: string;
+  paragraphs: string[];
+}
+
+export interface ContentResult {
+  abstract?: string;
+  sections: ParsedSection[];
+}
+
+export type ContentFetchResult =
+  | { ok: true; kind: 'ok'; content: ContentResult }
+  | { ok: false; kind: 'not_found'; status?: number }
+  | { ok: false; kind: 'quota'; status: 429 }
+  | { ok: false; kind: 'transient'; status?: number; message: string };
+
+/** Works hint only: no GROBID XML advertised, and we have never confirmed a not_found fetch. */
+export function isHintOnly(paper: Pick<PaperCard, 'hasGrobidXml' | 'unreadableStampedAt'>): boolean {
+  return paper.hasGrobidXml === false && paper.unreadableStampedAt == null;
+}
+
+/** Visible mark on deck / journal / reader. Missing hasGrobidXml (old rows) stays unmarked until a stamp. */
+export function showsNoInAppText(paper: Pick<PaperCard, 'unreadable' | 'hasGrobidXml'>): boolean {
+  return paper.unreadable === true || paper.hasGrobidXml === false;
+}
+
+export function publisherUrl(paper: Pick<PaperCard, 'url'>): string | null {
+  const url = paper.url?.trim();
+  return url ? url : null;
+}
+
+export type UnreadableStampPatch = Pick<
+  PaperCard,
+  'unreadable' | 'unreadableStampedAt' | 'hasGrobidXml' | 'updatedAt'
+>;

@@ -1,5 +1,5 @@
 import { db } from '../lib/db';
-import { Aim, PaperCard, Pool, RepositoryConfig } from '../types';
+import { Aim, PaperCard, PileStatus, Pool, RepositoryConfig, UnreadableStampPatch } from '../types';
 
 const ACTIVE_AIM_KEY = 'active_aim_id';
 
@@ -98,8 +98,28 @@ export function shouldFirstFetch(aim: Aim): boolean {
   return aim.lastFetchAt === null;
 }
 
+export function derivePileStatus(
+  leftoverCount: number,
+  lastFetchOk: boolean,
+  live?: 'failed' | 'quota',
+): PileStatus {
+  if (leftoverCount === 0) {
+    if (live) return live;
+    return lastFetchOk ? 'caught_up' : 'failed';
+  }
+  return live ?? 'ready';
+}
+
 export async function listAims(): Promise<Aim[]> {
   return db.aims.toArray();
+}
+
+export function sortAimsForChips(aims: Aim[]): Aim[] {
+  return [...aims].sort((a, b) => {
+    if (a.id === 'global-recent') return -1;
+    if (b.id === 'global-recent') return 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export async function getAim(id: string): Promise<Aim | undefined> {
@@ -226,6 +246,59 @@ export async function ensureGlobalRecent(): Promise<Aim> {
   });
   await db.aims.put(aim);
   return aim;
+}
+
+function applyCardPatch(card: PaperCard, patch: UnreadableStampPatch): PaperCard {
+  const next: PaperCard = { ...card, ...patch };
+  if (!('unreadableStampedAt' in patch) || patch.unreadableStampedAt == null) {
+    delete next.unreadableStampedAt;
+  }
+  return next;
+}
+
+async function patchPaperSnapshots(
+  paperId: string,
+  patch: UnreadableStampPatch,
+): Promise<void> {
+  await db.transaction('rw', db.aims, db.savedPapers, async () => {
+    const aims = await db.aims.toArray();
+    for (const aim of aims) {
+      const idx = aim.leftoverIds.indexOf(paperId);
+      if (idx === -1) continue;
+      const leftoverCards = aim.leftoverCards.map((card, i) =>
+        i === idx ? applyCardPatch(card, patch) : card,
+      );
+      const leftover = writeLeftoverFields(aim.leftoverIds, leftoverCards);
+      await db.aims.update(aim.id, { ...leftover, updatedAt: Date.now() });
+    }
+
+    const saved = await db.savedPapers.get(paperId);
+    if (saved) {
+      await db.savedPapers.put(applyCardPatch(saved, patch));
+    }
+  });
+}
+
+/** Persist a confirmed no-body Content fetch on leftover snapshot + savedPapers together. */
+export async function stampUnreadable(paperId: string, stampedAt = Date.now()): Promise<UnreadableStampPatch> {
+  const patch: UnreadableStampPatch = {
+    unreadable: true,
+    unreadableStampedAt: stampedAt,
+    updatedAt: stampedAt,
+  };
+  await patchPaperSnapshots(paperId, patch);
+  return patch;
+}
+
+/** Lift a prior stamp after a later open finds GROBID XML. Hint-only rows are never lifted this way. */
+export async function liftUnreadableStamp(paperId: string): Promise<UnreadableStampPatch> {
+  const patch: UnreadableStampPatch = {
+    unreadable: false,
+    hasGrobidXml: true,
+    updatedAt: Date.now(),
+  };
+  await patchPaperSnapshots(paperId, patch);
+  return patch;
 }
 
 export async function ensureTopicAim(topicId: string, name: string): Promise<Aim> {
