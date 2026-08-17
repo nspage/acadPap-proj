@@ -1,3 +1,16 @@
+/** Named-failure copy. Do not invent banners beyond the spec's spoken-state rules. */
+export const SPOKEN = {
+  pileFailed: "Couldn't load papers.",
+  quota: 'Cap is used, come back later.',
+  saveFailed: "Couldn't save the paper.",
+  discardFailed: "Couldn't discard the paper.",
+  leftoverFailed: "Couldn't keep the leftover pile.",
+  noteFailed: "Couldn't save the note.",
+  brokenRead: "Couldn't get the text",
+  journalPullFailed: "Couldn't load the journal.",
+  journalSyncFailed: "Couldn't sync the journal.",
+} as const;
+
 interface SpokenNoticeProps {
   message: string;
   onRetry?: () => void;

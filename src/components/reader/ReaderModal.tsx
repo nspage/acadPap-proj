@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { PaperCard, PaperNote, TextSelectionContext, UnreadableStampPatch, publisherUrl, showsNoInAppText } from '../../types';
 import { NoInAppTextMark } from '../common/NoInAppTextMark';
-import { SpokenNotice } from '../common/SpokenNotice';
+import { SpokenNotice, SPOKEN } from '../common/SpokenNotice';
 import { ReaderModeView } from './ReaderModeView';
 import { db } from '../../lib/db';
 import { persistNoteNow } from '../../lib/persist-note';
@@ -115,7 +115,8 @@ export const ReaderModal = forwardRef<ReaderModalHandle, ReaderModalProps>(funct
         setPersistFailed(false);
         setNotePersisted(true);
         if (result.impliedSave) await onImpliedSave(paper);
-      } catch {
+      } catch (err) {
+        console.error('Failed to save the note:', err);
         setPersistFailed(true);
         setNotePersisted(false);
       }
@@ -217,6 +218,11 @@ export const ReaderModal = forwardRef<ReaderModalHandle, ReaderModalProps>(funct
               onPaperUpdated={onPaperUpdated}
             />
           </div>
+          {persistFailed && (
+            <div className="absolute bottom-4 left-0 right-0 z-30 px-4">
+              <SpokenNotice message={SPOKEN.noteFailed} onRetry={retryPersist} />
+            </div>
+          )}
           {activeTab === 'notes' && (
             <div className="absolute inset-0 z-10 bg-slate-900 p-6 overflow-y-auto space-y-6">
               {/* Takeaways */}
@@ -281,13 +287,6 @@ export const ReaderModal = forwardRef<ReaderModalHandle, ReaderModalProps>(funct
                   className="w-full h-28 p-3 bg-slate-900 border border-slate-800 rounded-xl text-sm text-slate-200 focus:outline-none focus:border-indigo-500/50"
                 />
               </div>
-
-              {persistFailed && (
-                <SpokenNotice
-                  message="Couldn't save the note."
-                  onRetry={retryPersist}
-                />
-              )}
 
               <div className="flex justify-end">
                 <div className="flex items-center space-x-2 px-5 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-medium text-xs border border-slate-700/60">

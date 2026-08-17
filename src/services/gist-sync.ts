@@ -246,8 +246,13 @@ export async function pushStateToGist(pat: string, gistId: string): Promise<bool
       }),
     });
 
-    return res.ok;
-  } catch {
+    if (!res.ok) {
+      console.error('Failed to sync the journal:', res.status);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to sync the journal:', err);
     return false;
   }
 }
@@ -261,23 +266,31 @@ export async function pullStateFromGist(pat: string, gistId: string): Promise<bo
 
   try {
     const text = await fetchJournalFile(pat, gistId);
-    if (text === null) return false;
+    if (text === null) {
+      console.error('Failed to load the journal: empty or unusable gist file');
+      return false;
+    }
     if (text === '') return true;
 
     let parsed: unknown;
     try {
       parsed = JSON.parse(text);
-    } catch {
+    } catch (err) {
+      console.error('Failed to load the journal: parse error', err);
       return false;
     }
 
     const state = parseJournalState(parsed);
-    if (!state) return false;
+    if (!state) {
+      console.error('Failed to load the journal: unusable state');
+      return false;
+    }
 
     const keptLocalNewer = await mergeJournalState(state);
     if (keptLocalNewer) scheduleJournalPush();
     return true;
-  } catch {
+  } catch (err) {
+    console.error('Failed to load the journal:', err);
     return false;
   }
 }
