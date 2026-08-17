@@ -1,5 +1,6 @@
 import { db } from './db';
 import { dropFromLeftover, getActiveAimId, getAim } from '../services/aim-store';
+import { scheduleJournalPush } from '../services/gist-sync';
 import { isRealMark, PaperCard, PaperNote } from '../types';
 
 export type PersistNoteResult =
@@ -8,18 +9,18 @@ export type PersistNoteResult =
 
 /**
  * Write the note immediately. First real mark puts the paper in the journal
- * (one-way) and drops it from this device's leftover. Gist push waits for the
- * journal-sync ticket.
+ * (one-way) and drops it from this device's leftover. Schedules a journal push.
  */
 export async function persistNoteNow(note: PaperNote, paper: PaperCard): Promise<PersistNoteResult> {
   try {
     let impliedSave = false;
-    await db.transaction('rw', db.notes, db.savedPapers, async () => {
+    await db.transaction('rw', db.notes, db.savedPapers, db.journalTombstones, async () => {
       await db.notes.put(note);
       if (!isRealMark(note)) return;
       const existing = await db.savedPapers.get(paper.id);
       if (!existing) {
         await db.savedPapers.put({ ...paper, updatedAt: Date.now() });
+        await db.journalTombstones.delete(paper.id);
         impliedSave = true;
       }
     });
@@ -33,6 +34,7 @@ export async function persistNoteNow(note: PaperNote, paper: PaperCard): Promise
       }
     }
 
+    scheduleJournalPush();
     return { ok: true, impliedSave };
   } catch {
     return { ok: false };

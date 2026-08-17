@@ -1,7 +1,14 @@
 import { db } from './db';
+import { scheduleJournalPush } from '../services/gist-sync';
 import { ParagraphPlace } from '../types';
+import { markSyncFailedOnLeave } from './sync-flag';
 
-export const SYNC_FAILED_ON_LEAVE_KEY = 'sync_failed_on_leave';
+export {
+  SYNC_FAILED_ON_LEAVE_KEY,
+  clearSyncFailedOnLeave,
+  didSyncFailOnLeave,
+  markSyncFailedOnLeave,
+} from './sync-flag';
 
 const FIRST_VISIBLE_SLOP_PX = 8;
 const TITLE_ABSTRACT_CLEAR_PX = 48;
@@ -107,30 +114,6 @@ export function restorePlace(container: HTMLElement, place: ParagraphPlace): voi
   }
 }
 
-export function markSyncFailedOnLeave(): void {
-  try {
-    localStorage.setItem(SYNC_FAILED_ON_LEAVE_KEY, 'true');
-  } catch {
-    // private mode / denied storage
-  }
-}
-
-export function clearSyncFailedOnLeave(): void {
-  try {
-    localStorage.removeItem(SYNC_FAILED_ON_LEAVE_KEY);
-  } catch {
-    // private mode / denied storage
-  }
-}
-
-export function didSyncFailOnLeave(): boolean {
-  try {
-    return localStorage.getItem(SYNC_FAILED_ON_LEAVE_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
 export async function persistPlaceNow(
   container: HTMLElement | null,
   paperId: string | null,
@@ -149,6 +132,7 @@ export async function persistPlaceNow(
       place: captured,
       updatedAt: Date.now(),
     });
+    scheduleJournalPush();
     return true;
   } catch {
     markSyncFailedOnLeave();

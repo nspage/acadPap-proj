@@ -7,6 +7,7 @@ interface SettingsModalProps {
   onSaveApiKey: (key: string) => void;
   sources: RepositoryConfig[];
   onResetDatabase: () => void;
+  onCloudCredentialsSaved?: (pat: string, gistId: string) => void;
   onClose: () => void;
 }
 
@@ -15,6 +16,7 @@ export function SettingsModal({
   onSaveApiKey,
   sources,
   onResetDatabase,
+  onCloudCredentialsSaved,
   onClose,
 }: SettingsModalProps) {
   const [inputKey, setInputKey] = useState(apiKey);
@@ -40,10 +42,13 @@ export function SettingsModal({
   };
 
   const handleCloudSave = () => {
-    localStorage.setItem('github_pat', githubPat.trim());
-    localStorage.setItem('gist_id', gistId.trim());
+    const pat = githubPat.trim();
+    const id = gistId.trim();
+    localStorage.setItem('github_pat', pat);
+    localStorage.setItem('gist_id', id);
     setSavedCloud(true);
     setTimeout(() => setSavedCloud(false), 2000);
+    if (pat && id) onCloudCredentialsSaved?.(pat, id);
   };
 
   const handleKeySave = () => {

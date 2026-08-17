@@ -2,7 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { Aim, PaperCard, PileStatus, Pool, UnreadableStampPatch, isFeedError } from './types';
 import { db, initializeDatabase, DEFAULT_SOURCES } from './lib/db';
 import { fetchPapersForAim } from './services/adapters';
-import { pushStateToGist, pullStateFromGist } from './services/gist-sync';
+import {
+  flushJournalPush,
+  getJournalCreds,
+  journalIsDirty,
+  lastJournalPushFailed,
+  pullStateFromGist,
+  scheduleJournalPush,
+} from './services/gist-sync';
 import {
   derivePileStatus,
   dropFromLeftover,
@@ -38,8 +45,6 @@ import { Loader2 } from 'lucide-react';
 type PileAction = 'replace' | 'refresh' | 'flip';
 
 export function App() {
-  const isHydrating = useRef(false);
-  const syncTimeout = useRef<NodeJS.Timeout | null>(null);
   const pileGen = useRef(0);
   const lastPileAction = useRef<PileAction>('replace');
   const pendingFlipPool = useRef<Pool | null>(null);
@@ -55,6 +60,7 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
   const [leaveSyncFailed, setLeaveSyncFailed] = useState(() => didSyncFailOnLeave());
+  const [journalPullFailed, setJournalPullFailed] = useState(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
   const papersRef = useRef<PaperCard[]>([]);
   papersRef.current = papers;
@@ -258,13 +264,45 @@ export function App() {
     })();
   };
 
+  const runLeavePipeline = async () => {
+    await persistOpenPlace();
+    await flushJournalPush();
+  };
+
   const handleRetryLeaveSync = async () => {
     if (readerRef.current) {
-      const ok = await readerRef.current.persistPlaceNow();
-      if (!ok) return;
+      const placeOk = await readerRef.current.persistPlaceNow();
+      if (!placeOk) return;
     }
+    const flushOk = await flushJournalPush();
+    if (!flushOk || journalIsDirty() || lastJournalPushFailed()) return;
     clearSyncFailedOnLeave();
     setLeaveSyncFailed(false);
+  };
+
+  const pullJournal = async (pat: string, gistId: string): Promise<boolean> => {
+    const ok = await pullStateFromGist(pat, gistId);
+    await evictJournaledFromLeftovers();
+    return ok;
+  };
+
+  const handleRetryJournalPull = async () => {
+    const creds = getJournalCreds();
+    if (!creds) {
+      setJournalPullFailed(false);
+      return;
+    }
+    const ok = await pullJournal(creds.pat, creds.gistId);
+    if (!ok) return;
+    setJournalPullFailed(false);
+    await restoreActiveAim();
+  };
+
+  const handleCloudCredentialsSaved = async (pat: string, gistId: string) => {
+    if (!pat || !gistId) return;
+    const ok = await pullJournal(pat, gistId);
+    setJournalPullFailed(!ok);
+    await restoreActiveAim();
   };
 
   const handleRetryPile = () => {
@@ -283,7 +321,7 @@ export function App() {
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        void persistOpenPlace();
+        void runLeavePipeline();
         return;
       }
       if (document.visibilityState === 'visible' && didSyncFailOnLeave()) {
@@ -291,7 +329,7 @@ export function App() {
       }
     };
     const onPageHide = () => {
-      void persistOpenPlace();
+      void runLeavePipeline();
     };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', onPageHide);
@@ -305,46 +343,28 @@ export function App() {
     let active = true;
     initializeDatabase().then(async () => {
       if (!active) return;
-      const pat = localStorage.getItem('github_pat');
-      const gistId = localStorage.getItem('gist_id');
-
-      if (pat && gistId) {
-        isHydrating.current = true;
-        await pullStateFromGist(pat, gistId);
-        isHydrating.current = false;
+      const creds = getJournalCreds();
+      let pullOk = true;
+      if (creds) {
+        pullOk = await pullJournal(creds.pat, creds.gistId);
       }
-
-      if (active) await restoreActiveAim();
+      if (!active) return;
+      await restoreActiveAim();
+      if (!pullOk) setJournalPullFailed(true);
     });
     return () => { active = false; };
   }, []);
 
-  useEffect(() => {
-    if (isLoading || isHydrating.current) return;
-
-    const pat = localStorage.getItem('github_pat');
-    const gistId = localStorage.getItem('gist_id');
-    if (!pat || !gistId) return;
-
-    if (syncTimeout.current) clearTimeout(syncTimeout.current);
-
-    syncTimeout.current = setTimeout(() => {
-      pushStateToGist(pat, gistId);
-    }, 3000);
-
-    return () => {
-      if (syncTimeout.current) clearTimeout(syncTimeout.current);
-    };
-  }, [savedPapers, notes, dbSources]);
-
   const handleSavePaper = async (paper: PaperCard): Promise<boolean> => {
     try {
       await db.savedPapers.put({ ...paper, updatedAt: Date.now() });
+      await db.journalTombstones.delete(paper.id);
       const aimId = getActiveAimId();
       await dropFromLeftover(aimId, paper.id);
       const aim = await getAim(aimId);
       const leftover = aim?.leftoverCards ?? papersRef.current.filter((card) => card.id !== paper.id);
       showAimLeftover(leftover, aim?.lastFetchOk ?? true);
+      scheduleJournalPush();
       return true;
     } catch (err) {
       console.error('Failed to save paper:', err);
@@ -360,6 +380,7 @@ export function App() {
       const aim = await getAim(aimId);
       const leftover = aim?.leftoverCards ?? papersRef.current.filter((card) => card.id !== paper.id);
       showAimLeftover(leftover, aim?.lastFetchOk ?? true);
+      scheduleJournalPush();
       return true;
     } catch (err) {
       console.error('Failed to discard paper:', err);
@@ -390,11 +411,19 @@ export function App() {
 
   const handleRemoveSavedPaper = async (paperId: string) => {
     try {
-      await db.savedPapers.delete(paperId);
-      await db.notes.where('paperId').equals(paperId).delete();
-      await db.pdfCache.delete(paperId);
-      await db.contentCache.delete(paperId);
-      await db.readingPlaces.delete(paperId);
+      await db.transaction(
+        'rw',
+        [db.savedPapers, db.notes, db.pdfCache, db.contentCache, db.readingPlaces, db.journalTombstones],
+        async () => {
+          await db.savedPapers.delete(paperId);
+          await db.notes.where('paperId').equals(paperId).delete();
+          await db.pdfCache.delete(paperId);
+          await db.contentCache.delete(paperId);
+          await db.readingPlaces.delete(paperId);
+          await db.journalTombstones.put({ id: paperId, deletedAt: Date.now() });
+        },
+      );
+      scheduleJournalPush();
     } catch (err) {
       console.error('Failed to remove paper:', err);
     }
@@ -420,6 +449,7 @@ export function App() {
       localStorage.removeItem('active_aim_id');
       clearSyncFailedOnLeave();
       setLeaveSyncFailed(false);
+      setJournalPullFailed(false);
       const aim = await ensureGlobalRecent();
       switchActiveAim(aim.id);
       setIsLoading(true);
@@ -441,9 +471,15 @@ export function App() {
       />
 
       <main className="flex-1 flex flex-col items-center justify-start p-4 w-full">
+        {journalPullFailed && (
+          <SpokenNotice
+            message="Couldn't load the journal."
+            onRetry={() => { void handleRetryJournalPull(); }}
+          />
+        )}
         {leaveSyncFailed && (
           <SpokenNotice
-            message="Couldn't save your place."
+            message="Couldn't sync the journal."
             onRetry={() => { void handleRetryLeaveSync(); }}
           />
         )}
@@ -504,6 +540,7 @@ export function App() {
           onSaveApiKey={handleSaveApiKey}
           sources={sources}
           onResetDatabase={handleResetDatabase}
+          onCloudCredentialsSaved={handleCloudCredentialsSaved}
           onClose={() => {
             setIsSettingsOpen(false);
             void restoreActiveAim();

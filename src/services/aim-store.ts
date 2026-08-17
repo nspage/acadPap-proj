@@ -1,5 +1,6 @@
 import { db } from '../lib/db';
 import { Aim, PaperCard, PileStatus, Pool, RepositoryConfig, UnreadableStampPatch } from '../types';
+import { scheduleJournalPush } from './gist-sync';
 
 const ACTIVE_AIM_KEY = 'active_aim_id';
 
@@ -259,7 +260,8 @@ function applyCardPatch(card: PaperCard, patch: UnreadableStampPatch): PaperCard
 async function patchPaperSnapshots(
   paperId: string,
   patch: UnreadableStampPatch,
-): Promise<void> {
+): Promise<boolean> {
+  let wroteSaved = false;
   await db.transaction('rw', db.aims, db.savedPapers, async () => {
     const aims = await db.aims.toArray();
     for (const aim of aims) {
@@ -275,8 +277,10 @@ async function patchPaperSnapshots(
     const saved = await db.savedPapers.get(paperId);
     if (saved) {
       await db.savedPapers.put(applyCardPatch(saved, patch));
+      wroteSaved = true;
     }
   });
+  return wroteSaved;
 }
 
 /** Persist a confirmed no-body Content fetch on leftover snapshot + savedPapers together. */
@@ -286,7 +290,8 @@ export async function stampUnreadable(paperId: string, stampedAt = Date.now()): 
     unreadableStampedAt: stampedAt,
     updatedAt: stampedAt,
   };
-  await patchPaperSnapshots(paperId, patch);
+  const wroteSaved = await patchPaperSnapshots(paperId, patch);
+  if (wroteSaved) scheduleJournalPush();
   return patch;
 }
 
@@ -297,7 +302,8 @@ export async function liftUnreadableStamp(paperId: string): Promise<UnreadableSt
     hasGrobidXml: true,
     updatedAt: Date.now(),
   };
-  await patchPaperSnapshots(paperId, patch);
+  const wroteSaved = await patchPaperSnapshots(paperId, patch);
+  if (wroteSaved) scheduleJournalPush();
   return patch;
 }
 
