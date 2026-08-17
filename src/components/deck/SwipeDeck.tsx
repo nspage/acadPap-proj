@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { animate, motion, useMotionValue, useTransform } from 'framer-motion';
 import { PaperCard, PileStatus } from '../../types';
 import { PaperCardItem } from './PaperCardItem';
 import { SpokenNotice, SPOKEN } from '../common/SpokenNotice';
@@ -15,14 +15,20 @@ interface SwipeDeckProps {
   onRetryPile: () => void;
 }
 
+function flyDistance(dir: 'left' | 'right'): number {
+  const width = typeof window === 'undefined' ? 500 : window.innerWidth;
+  return (dir === 'right' ? 1 : -1) * (width + 160);
+}
+
 export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRefresh, onRetryPile }: SwipeDeckProps) {
   const [deck, setDeck] = useState<PaperCard[]>([]);
   const [swipedDir, setSwipedDir] = useState<'left' | 'right' | null>(null);
   const [actionNotice, setActionNotice] = useState<'save' | 'discard' | null>(null);
   const lastDragX = useRef(0);
+  const busyRef = useRef(false);
+  const inflightId = useRef<string | null>(null);
   const x = useMotionValue(0);
 
-  // Motion physics calculations for swipe gestures
   const rotate = useTransform(x, [-200, 200], [-18, 18]);
   const opacitySave = useTransform(x, [50, 150], [0, 1]);
   const opacityDiscard = useTransform(x, [-150, -50], [1, 0]);
@@ -32,44 +38,42 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
   ).join('|');
 
   useEffect(() => {
-    setDeck(papers);
-    x.set(0);
-    setSwipedDir(null);
+    setDeck(papers.filter((paper) => paper.id !== inflightId.current));
   }, [papersKey]);
 
   const activeCard = deck[0];
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     x.set(0);
-    setSwipedDir(null);
     lastDragX.current = 0;
   }, [activeCard?.id]);
 
-  const handleSwipeRight = async () => {
-    if (!activeCard) return;
-    setSwipedDir('right');
-    const ok = await onSave(activeCard);
+  const commit = async (dir: 'left' | 'right') => {
+    if (!activeCard || busyRef.current) return;
+    const card = activeCard;
+    busyRef.current = true;
+    inflightId.current = card.id;
+    setSwipedDir(dir);
+    setActionNotice(null);
+
+    await animate(x, flyDistance(dir), { duration: 0.22, ease: 'easeOut' });
+    setDeck((prev) => prev.filter((paper) => paper.id !== card.id));
+
+    const ok = dir === 'right' ? await onSave(card) : await onDiscard(card);
+    inflightId.current = null;
+    busyRef.current = false;
+    setSwipedDir(null);
+
     if (ok === false) {
-      setSwipedDir(null);
-      x.set(0);
-      setActionNotice('save');
+      setDeck((prev) => [card, ...prev.filter((paper) => paper.id !== card.id)]);
+      setActionNotice(dir === 'right' ? 'save' : 'discard');
       return;
     }
     setActionNotice(null);
   };
 
-  const handleSwipeLeft = async () => {
-    if (!activeCard) return;
-    setSwipedDir('left');
-    const ok = await onDiscard(activeCard);
-    if (ok === false) {
-      setSwipedDir(null);
-      x.set(0);
-      setActionNotice('discard');
-      return;
-    }
-    setActionNotice(null);
-  };
+  const handleSwipeRight = () => { void commit('right'); };
+  const handleSwipeLeft = () => { void commit('left'); };
 
   // Keyboard shortcut listener
   useEffect(() => {
@@ -143,10 +147,10 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
         />
       )}
       {/* Card Stack Container */}
-      <div className="relative w-full min-h-[480px] h-[65vh] max-h-[600px] md:h-[75vh] md:max-h-[750px] flex items-center justify-center">
-        <AnimatePresence mode="popLayout">
-          {deck.slice(0, 3).map((paper, index) => {
+      <div className="relative w-full min-h-[480px] h-[65vh] max-h-[600px] md:h-[75vh] md:max-h-[750px] flex items-center justify-center overflow-x-clip">
+        {deck.slice(0, 3).map((paper, index) => {
             const isTop = index === 0;
+            const flying = isTop && swipedDir != null;
             return (
               <motion.div
                 key={paper.id}
@@ -155,21 +159,25 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
                   x: isTop ? x : 0,
                   rotate: isTop ? rotate : 0,
                 }}
-                drag={isTop ? 'x' : false}
+                drag={isTop && !flying ? 'x' : false}
+                dragDirectionLock
                 dragConstraints={{ left: 0, right: 0 }}
-                dragSnapToOrigin={true}
+                dragElastic={0.9}
+                dragSnapToOrigin={!flying}
                 onDragEnd={(_, info) => {
                   lastDragX.current = info.offset.x;
-                  if (info.offset.x > 100) {
+                  const goRight = info.offset.x > 80 || info.velocity.x > 600;
+                  const goLeft = info.offset.x < -80 || info.velocity.x < -600;
+                  if (goRight) {
                     handleSwipeRight();
-                  } else if (info.offset.x < -100) {
+                  } else if (goLeft) {
                     handleSwipeLeft();
                   } else {
-                    x.set(0);
+                    void animate(x, 0, { type: 'spring', stiffness: 400, damping: 30 });
                   }
                 }}
                 onClick={(e) => {
-                  if (!isTop) return;
+                  if (!isTop || flying) return;
                   if (Math.abs(lastDragX.current) > 10) {
                     lastDragX.current = 0;
                     return;
@@ -180,13 +188,6 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
                 }}
                 initial={{ scale: 1 - index * 0.05, y: index * 12, opacity: 1 - index * 0.2 }}
                 animate={{ scale: 1 - index * 0.05, y: index * 12, opacity: 1 - index * 0.2 }}
-                exit={
-                  swipedDir === 'right'
-                    ? { x: 350, opacity: 0, transition: { duration: 0.25 } }
-                    : swipedDir === 'left'
-                    ? { x: -350, opacity: 0, transition: { duration: 0.25 } }
-                    : { scale: 0.9, opacity: 0, transition: { duration: 0.2 } }
-                }
                 transition={{ type: 'spring', stiffness: 300, damping: 25 }}
                 className="absolute top-0 left-0 w-full h-full cursor-grab active:cursor-grabbing"
               >
@@ -219,7 +220,6 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
               </motion.div>
             );
           })}
-        </AnimatePresence>
       </div>
 
       {/* Swipe Action Control Buttons */}
@@ -232,7 +232,7 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
           <X className="w-6 h-6" />
         </button>
 
-        <div className="flex items-center space-x-1 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-[11px] text-slate-400 font-mono">
+        <div className="hidden sm:flex items-center space-x-1 px-3 py-1.5 rounded-full bg-slate-900 border border-slate-800 text-[11px] text-slate-400 font-mono">
           <Keyboard className="w-3.5 h-3.5 text-slate-500" />
           <span>← / H or → / L</span>
         </div>
