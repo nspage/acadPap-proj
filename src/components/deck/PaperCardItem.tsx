@@ -18,7 +18,7 @@ export function PaperCardItem({ paper, onSave, isTopCard }: PaperCardItemProps) 
   return (
     <div className="w-full h-full bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col justify-between selection:bg-indigo-500/30 overflow-hidden">
       {/* Scrollable Main Content Area */}
-      <div className="flex-1 overflow-y-auto pr-1 space-y-3">
+      <div className={`flex-1 pr-1 space-y-3 ${isExpanded ? 'overflow-y-auto' : 'overflow-hidden'}`}>
         {/* Retraction Warning */}
         {paper.isRetracted && (
           <div className="flex items-center justify-center bg-red-500/20 text-red-400 font-bold text-xs uppercase tracking-widest py-1.5 px-3 rounded-xl border border-red-500/30 mb-2">
