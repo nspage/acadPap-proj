@@ -70,7 +70,7 @@ export function Header({
             <button
               onClick={onRefreshFeed}
               disabled={isRefreshing}
-              title="Reshuffle & Refresh Feed"
+              title="Load newer papers"
               className="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700 disabled:opacity-50 transition-all"
             >
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />

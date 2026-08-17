@@ -1,4 +1,7 @@
-import { PaperCard, RepositoryConfig } from '../../types';
+import { Aim, FeedError, PaperCard } from '../../types';
+
+// Product law (user decision 2026-08-17). Do not show this number in the UI.
+export const CITED_POOL_MIN_CITATIONS = 5;
 
 function reconstructAbstract(invertedIndex: Record<string, number[]> | null): string {
   if (!invertedIndex) return '';
@@ -11,41 +14,46 @@ function reconstructAbstract(invertedIndex: Record<string, number[]> | null): st
   return words.filter(Boolean).join(' ').trim();
 }
 
-export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): Promise<PaperCard[]> {
-  const query = config.params.queryKeywords || '';
-  const searchQuery = query ? `&search=${encodeURIComponent(query)}` : '';
-  
+export async function fetchOpenAlexPapers(aim: Aim, page = 1): Promise<PaperCard[]> {
   const useGeoFilter = localStorage.getItem('filter_geo') === 'true';
   const useImpactFilter = localStorage.getItem('filter_impact') === 'true';
-  
+
   // We want to fetch papers with full text available, OA, and exclusively in English.
   let filterQuery = `&filter=has_fulltext:true,is_oa:true,language:en`;
-  
+
   if (useGeoFilter) {
     // Whitelist top research regions: NA (US, CA), Europe (GB, DE, FR, CH, NL, SE, DK, FI, NO, IT, ES, AT, BE, IE), Asia/Oceania (JP, KR, CN, SG, IL, TW, HK, AU, NZ)
     filterQuery += `,institutions.country_code:us|ca|gb|de|fr|ch|nl|se|dk|fi|no|it|es|at|be|ie|jp|kr|cn|sg|il|tw|hk|au|nz`;
   }
-  
+
+  // Hood quality filter. Separate from the sitting recent/cited pool flip.
   if (useImpactFilter) {
-    // 5+ citations ensures the paper has some proven baseline impact
     filterQuery += `,cited_by_count:>5`;
   }
-  
-  if (config.params.openAlexFilter) {
-    filterQuery += `,${config.params.openAlexFilter}`;
-  }
-  
-  const sortImpact = localStorage.getItem('sort_impact') === 'true';
-  const sortQuery = sortImpact ? `&sort=publication_year:desc,cited_by_count:desc` : `&sort=publication_year:desc`;
 
-  const url = `https://api.openalex.org/works?per_page=15&page=${page}${filterQuery}${searchQuery}${sortQuery}`;
+  if (aim.pool === 'cited' && !useImpactFilter) {
+    filterQuery += `,cited_by_count:>${CITED_POOL_MIN_CITATIONS}`;
+  }
+
+  if (aim.openAlexFilter) {
+    filterQuery += `,${aim.openAlexFilter}`;
+  }
+
+  const sortQuery = `&sort=publication_year:desc`;
+
+  const url = `https://api.openalex.org/works?per_page=15&page=${page}${filterQuery}${sortQuery}`;
 
   const res = await fetch(url, {
     headers: {
       'Authorization': `Bearer ScDyE5FFaburyQ6XWmb7dY`
     }
   });
-  if (!res.ok) throw new Error(`OpenAlex error: ${res.status}`);
+  if (res.status === 429) {
+    throw new FeedError('OpenAlex quota', 'quota', 429);
+  }
+  if (!res.ok) {
+    throw new FeedError(`OpenAlex error: ${res.status}`, 'transient', res.status);
+  }
   const data = await res.json();
 
   const works = data.results || [];
@@ -76,9 +84,9 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
     const venue = work.primary_location?.source?.display_name || 'OpenAlex';
 
     // Topics / Tags
-    const tags = Array.isArray(work.topics) 
-      ? work.topics.map((t: any) => t.display_name).slice(0, 3) 
-      : [config.category];
+    const tags = Array.isArray(work.topics)
+      ? work.topics.map((t: any) => t.display_name).slice(0, 3)
+      : [];
 
     return {
       id: `openalex:${openAlexId}`,
@@ -88,11 +96,12 @@ export async function fetchOpenAlexPapers(config: RepositoryConfig, page = 1): P
       abstract: reconstructAbstract(work.abstract_inverted_index),
       authors,
       publishedDate: work.publication_date || `${work.publication_year}-01-01`,
-      url: work.primary_location?.landing_page_url || work.id,
+      url: work.primary_location?.landing_page_url || '',
       pdfUrl,
       doi: work.doi ? work.doi.replace('https://doi.org/', '') : undefined,
       tags,
-      hasContent: Boolean(work.has_content?.grobid_xml || work.has_content?.pdf),
+      hasGrobidXml: Boolean(work.has_content?.grobid_xml),
+      unreadable: !work.has_content?.grobid_xml,
       
       citationCount: work.cited_by_count,
       fwci: work.fwci,

@@ -6,7 +6,6 @@ interface SettingsModalProps {
   apiKey: string;
   onSaveApiKey: (key: string) => void;
   sources: RepositoryConfig[];
-  onToggleSource: (sourceId: string) => void;
   onResetDatabase: () => void;
   onClose: () => void;
 }
@@ -15,7 +14,6 @@ export function SettingsModal({
   apiKey,
   onSaveApiKey,
   sources,
-  onToggleSource,
   onResetDatabase,
   onClose,
 }: SettingsModalProps) {
@@ -184,8 +182,9 @@ export function SettingsModal({
                   </div>
 
                   <button
-                    onClick={() => onToggleSource(source.id)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    type="button"
+                    disabled
+                    className={`px-3 py-1 rounded-lg text-xs font-medium cursor-not-allowed opacity-60 ${
                       source.enabled
                         ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                         : 'bg-slate-800 text-slate-500 border border-slate-700'

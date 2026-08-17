@@ -1,19 +1,24 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
-import { PaperCard } from '../../types';
+import { PaperCard, PileStatus } from '../../types';
 import { PaperCardItem } from './PaperCardItem';
-import { X, Heart, Sparkles, Keyboard, CheckCircle2, RotateCcw } from 'lucide-react';
+import { SpokenNotice } from '../common/SpokenNotice';
+import { X, Heart, Keyboard, CheckCircle2, RotateCcw } from 'lucide-react';
 
 interface SwipeDeckProps {
   papers: PaperCard[];
+  pileStatus: PileStatus;
   onSave: (paper: PaperCard) => void | Promise<boolean>;
   onDiscard: (paper: PaperCard) => void | Promise<boolean>;
+  onOpen: (paper: PaperCard) => void;
   onRefresh: () => void;
+  onRetryPile: () => void;
 }
 
-export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckProps) {
+export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRefresh, onRetryPile }: SwipeDeckProps) {
   const [deck, setDeck] = useState<PaperCard[]>([]);
   const [swipedDir, setSwipedDir] = useState<'left' | 'right' | null>(null);
+  const lastDragX = useRef(0);
   const x = useMotionValue(0);
 
   // Motion physics calculations for swipe gestures
@@ -21,7 +26,9 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
   const opacitySave = useTransform(x, [50, 150], [0, 1]);
   const opacityDiscard = useTransform(x, [-150, -50], [1, 0]);
 
-  const papersKey = papers.map((paper) => paper.id).join('|');
+  const papersKey = papers.map((paper) =>
+    `${paper.id}:${paper.unreadableStampedAt ?? ''}:${paper.hasGrobidXml === false ? 0 : 1}:${paper.unreadable ? 1 : 0}`,
+  ).join('|');
 
   useEffect(() => {
     setDeck(papers);
@@ -34,6 +41,7 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
   useEffect(() => {
     x.set(0);
     setSwipedDir(null);
+    lastDragX.current = 0;
   }, [activeCard?.id]);
 
   const handleSwipeRight = async () => {
@@ -78,6 +86,19 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
   }, [activeCard]);
 
   if (deck.length === 0) {
+    if (pileStatus !== 'caught_up') {
+      return (
+        <SpokenNotice
+          message={
+            pileStatus === 'quota'
+              ? "Cap is used, come back later."
+              : "Couldn't load papers."
+          }
+          onRetry={onRetryPile}
+        />
+      );
+    }
+
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center max-w-md mx-auto my-12 bg-slate-900/60 border border-slate-800 rounded-3xl backdrop-blur-xl">
         <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-400 flex items-center justify-center mb-4 ring-1 ring-indigo-500/20">
@@ -100,6 +121,16 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
 
   return (
     <div className="flex flex-col items-center w-full max-w-2xl mx-auto px-4 py-4">
+      {(pileStatus === 'failed' || pileStatus === 'quota') && (
+        <SpokenNotice
+          message={
+            pileStatus === 'quota'
+              ? "Cap is used, come back later."
+              : "Couldn't load papers."
+          }
+          onRetry={onRetryPile}
+        />
+      )}
       {/* Card Stack Container */}
       <div className="relative w-full min-h-[480px] h-[65vh] max-h-[600px] md:h-[75vh] md:max-h-[750px] flex items-center justify-center">
         <AnimatePresence mode="popLayout">
@@ -117,6 +148,7 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
                 dragConstraints={{ left: 0, right: 0 }}
                 dragSnapToOrigin={true}
                 onDragEnd={(_, info) => {
+                  lastDragX.current = info.offset.x;
                   if (info.offset.x > 100) {
                     handleSwipeRight();
                   } else if (info.offset.x < -100) {
@@ -124,6 +156,16 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
                   } else {
                     x.set(0);
                   }
+                }}
+                onClick={(e) => {
+                  if (!isTop) return;
+                  if (Math.abs(lastDragX.current) > 10) {
+                    lastDragX.current = 0;
+                    return;
+                  }
+                  const target = e.target as HTMLElement;
+                  if (target.closest('button, a')) return;
+                  onOpen(paper);
                 }}
                 initial={{ scale: 1 - index * 0.05, y: index * 12, opacity: 1 - index * 0.2 }}
                 animate={{ scale: 1 - index * 0.05, y: index * 12, opacity: 1 - index * 0.2 }}
@@ -144,7 +186,7 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
                       style={{ opacity: opacitySave }}
                       className="absolute top-6 left-6 z-20 px-4 py-2 border-2 border-emerald-400 text-emerald-400 font-extrabold text-lg rounded-xl tracking-wider uppercase bg-emerald-950/80 backdrop-blur pointer-events-none transform -rotate-12 shadow-lg"
                     >
-                      SAVE & READ
+                      SAVE
                     </motion.div>
 
                     <motion.div
@@ -158,8 +200,9 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
 
                 <PaperCardItem
                   paper={paper}
-                  onSaveAndRead={handleSwipeRight}
+                  onSave={handleSwipeRight}
                   onDiscard={handleSwipeLeft}
+                  onOpen={() => onOpen(paper)}
                   isTopCard={isTop}
                 />
               </motion.div>
@@ -185,7 +228,7 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
 
         <button
           onClick={handleSwipeRight}
-          title="Save & Deep Read (Right Arrow / L)"
+          title="Save (Right Arrow / L)"
           className="w-14 h-14 rounded-2xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 flex items-center justify-center shadow-lg shadow-emerald-500/10 hover:scale-105 active:scale-95 transition-all"
         >
           <Heart className="w-6 h-6" />
