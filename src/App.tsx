@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Aim, PaperCard, PileStatus, Pool, isFeedError } from './types';
+import { Aim, PaperCard, PileStatus, Pool, UnreadableStampPatch, isFeedError } from './types';
 import { db, initializeDatabase, DEFAULT_SOURCES } from './lib/db';
 import { fetchPapersForAim } from './services/adapters';
 import { pushStateToGist, pullStateFromGist } from './services/gist-sync';
@@ -317,6 +317,20 @@ export function App() {
     }
   };
 
+  const handlePaperUpdated = (paperId: string, patch: UnreadableStampPatch) => {
+    const apply = (card: PaperCard): PaperCard => {
+      const next = { ...card, ...patch };
+      if (patch.unreadableStampedAt == null) delete next.unreadableStampedAt;
+      return next;
+    };
+    setPapers((prev) => {
+      const next = prev.map((card) => (card.id === paperId ? apply(card) : card));
+      papersRef.current = next;
+      return next;
+    });
+    setSelectedReaderPaper((prev) => (prev && prev.id === paperId ? apply(prev) : prev));
+  };
+
   const handleRemoveSavedPaper = async (paperId: string) => {
     try {
       await db.savedPapers.delete(paperId);
@@ -413,6 +427,7 @@ export function App() {
           paper={selectedReaderPaper}
           apiKey={apiKey}
           onClose={() => setSelectedReaderPaper(null)}
+          onPaperUpdated={handlePaperUpdated}
         />
       )}
 
