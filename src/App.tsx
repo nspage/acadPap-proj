@@ -317,6 +317,13 @@ export function App() {
     }
   };
 
+  const handleImpliedSave = async (paper: PaperCard) => {
+    const aimId = getActiveAimId();
+    const aim = await getAim(aimId);
+    const leftover = (aim?.leftoverCards ?? papersRef.current).filter((card) => card.id !== paper.id);
+    showAimLeftover(leftover, aim?.lastFetchOk ?? true);
+  };
+
   const handlePaperUpdated = (paperId: string, patch: UnreadableStampPatch) => {
     const apply = (card: PaperCard): PaperCard => {
       const next = { ...card, ...patch };
@@ -428,6 +435,7 @@ export function App() {
           apiKey={apiKey}
           onClose={() => setSelectedReaderPaper(null)}
           onPaperUpdated={handlePaperUpdated}
+          onImpliedSave={handleImpliedSave}
         />
       )}
 

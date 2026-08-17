@@ -167,3 +167,14 @@ export type UnreadableStampPatch = Pick<
   PaperCard,
   'unreadable' | 'unreadableStampedAt' | 'hasGrobidXml' | 'updatedAt'
 >;
+
+export function isRealMark(
+  note: Pick<PaperNote, 'takeaways' | 'synthesis' | 'quotes' | 'jargonTerms'>,
+): boolean {
+  return (
+    note.takeaways.trim().length > 0 ||
+    note.synthesis.trim().length > 0 ||
+    note.quotes.length > 0 ||
+    note.jargonTerms.length > 0
+  );
+}
