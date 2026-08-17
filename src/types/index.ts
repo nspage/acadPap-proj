@@ -19,7 +19,11 @@ export interface PaperCard {
   doi?: string;
   tags: string[];
   hasContent?: boolean;
-  
+  hasGrobidXml?: boolean;
+  unreadable?: boolean;
+  unreadableStampedAt?: number;
+  updatedAt?: number;
+
   // Contextual Metadata
   citationCount?: number;
   fwci?: number;
@@ -75,4 +79,38 @@ export interface TextSelectionContext {
   text: string;
   context: string;
   rect: DOMRect;
+}
+
+export type AimKind = 'global-recent' | 'topic';
+export type Pool = 'recent' | 'cited';
+
+export interface Aim {
+  id: string;
+  kind: AimKind;
+  name: string;
+  topicId?: string;
+  openAlexFilter: string;
+  leftoverIds: string[];
+  leftoverCards: PaperCard[];
+  pool: Pool;
+  lastFetchAt: number | null;
+  lastFetchOk: boolean;
+  updatedAt: number;
+}
+
+export interface ParagraphPlace {
+  sectionIndex: number;
+  paragraphIndex: number;
+  textPrefix: string;
+}
+
+export interface ReadingPlaceRow {
+  paperId: string;
+  place: ParagraphPlace | null;
+  updatedAt: number;
+}
+
+export interface JournalTombstone {
+  id: string;
+  deletedAt: number;
 }

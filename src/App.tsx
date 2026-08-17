@@ -1,8 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
-import { PaperCard, PaperNote, RepositoryConfig } from './types';
+import { PaperCard } from './types';
 import { db, initializeDatabase, DEFAULT_SOURCES } from './lib/db';
 import { fetchAllEnabledPapers } from './services/adapters';
 import { pushStateToGist, pullStateFromGist } from './services/gist-sync';
+import {
+  aimIdFromSourceId,
+  dropFromLeftover,
+  ensureGlobalRecent,
+  ensureTopicAim,
+  evictJournaledFromLeftovers,
+  getActiveAimId,
+  getAim,
+  markFetchFailed,
+  parkAim,
+  replaceLeftover,
+  restoreAim,
+  setActiveAimId,
+  shouldFirstFetch,
+  sourceIdFromAimId,
+} from './services/aim-store';
 import { Header } from './components/common/Header';
 import { SwipeDeck } from './components/deck/SwipeDeck';
 import { JournalView } from './components/journal/JournalView';
@@ -23,12 +39,14 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
   const [sortImpact, setSortImpact] = useState<boolean>(() => localStorage.getItem('sort_impact') === 'true');
+  const papersRef = useRef<PaperCard[]>([]);
+  papersRef.current = papers;
 
   const toggleSortImpact = () => {
     const next = !sortImpact;
     setSortImpact(next);
     localStorage.setItem('sort_impact', next.toString());
-    loadFeed();
+    void replaceActiveStack();
   };
 
   // Dexie live reactive queries
@@ -38,42 +56,69 @@ export function App() {
 
   const sources = dbSources.length > 0 ? dbSources : DEFAULT_SOURCES;
 
-  const loadFeed = async () => {
+  const parkCurrentLeftover = async () => {
+    const aimId = getActiveAimId();
+    const leftover = papersRef.current;
+    await parkAim(aimId, leftover.map((paper) => paper.id), leftover);
+  };
+
+  const showAimLeftover = (cards: PaperCard[]) => {
+    setPapers(cards);
+    papersRef.current = cards;
+  };
+
+  const replaceActiveStack = async () => {
+    const aimId = getActiveAimId();
     setIsLoading(true);
     try {
-      const currentSources = (await db.sources.toArray());
+      const currentSources = await db.sources.toArray();
       const activeSources = (currentSources.length > 0 ? currentSources : DEFAULT_SOURCES).filter((s) => s.enabled);
       const fetched = await fetchAllEnabledPapers(activeSources);
-
-      // Exclude already discarded or saved papers
       const savedIds = new Set((await db.savedPapers.toArray()).map((p) => p.id));
       const discardedIds = new Set((await db.discardedIds.toArray()).map((d) => d.id));
-
       const freshPapers = fetched.filter((p) => !savedIds.has(p.id) && !discardedIds.has(p.id));
-      setPapers(freshPapers);
+      const aim = await replaceLeftover(aimId, freshPapers, true);
+      showAimLeftover(aim.leftoverCards);
     } catch (err) {
       console.error('Failed to load feed:', err);
+      await markFetchFailed(aimId);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
+  const restoreActiveAim = async () => {
+    await evictJournaledFromLeftovers();
+    const aimId = getActiveAimId();
+    let aim = await restoreAim(aimId);
+    if (!aim) {
+      aim = await ensureGlobalRecent();
+      setActiveAimId(aim.id);
+    }
+    if (shouldFirstFetch(aim)) {
+      await replaceActiveStack();
+      return;
+    }
+    showAimLeftover(aim.leftoverCards);
+    setIsLoading(false);
+    setIsRefreshing(false);
+  };
+
   useEffect(() => {
     let active = true;
     initializeDatabase().then(async () => {
-      if (active) {
-        const pat = localStorage.getItem('github_pat');
-        const gistId = localStorage.getItem('gist_id');
-        
-        if (pat && gistId) {
-          isHydrating.current = true;
-          await pullStateFromGist(pat, gistId);
-          isHydrating.current = false;
-        }
-        
-        loadFeed();
+      if (!active) return;
+      const pat = localStorage.getItem('github_pat');
+      const gistId = localStorage.getItem('gist_id');
+
+      if (pat && gistId) {
+        isHydrating.current = true;
+        await pullStateFromGist(pat, gistId);
+        isHydrating.current = false;
       }
+
+      if (active) await restoreActiveAim();
     });
     return () => { active = false; };
   }, []);
@@ -98,26 +143,36 @@ export function App() {
     };
   }, [savedPapers, notes, dbSources]);
 
-  const handleSavePaper = async (paper: PaperCard) => {
+  const handleSavePaper = async (paper: PaperCard): Promise<boolean> => {
     try {
-      await db.savedPapers.put(paper);
+      await db.savedPapers.put({ ...paper, updatedAt: Date.now() });
+      const aimId = getActiveAimId();
+      await dropFromLeftover(aimId, paper.id);
+      const aim = await getAim(aimId);
+      showAimLeftover(aim?.leftoverCards ?? papersRef.current.filter((card) => card.id !== paper.id));
       if (paper.hasContent) {
-        // Open in-app reader for papers with hosted fulltext
         setSelectedReaderPaper(paper);
       } else {
-        // Open publisher page for papers without hosted content
         window.open(paper.url, '_blank', 'noopener,noreferrer');
       }
+      return true;
     } catch (err) {
       console.error('Failed to save paper:', err);
+      return false;
     }
   };
 
-  const handleDiscardPaper = async (paper: PaperCard) => {
+  const handleDiscardPaper = async (paper: PaperCard): Promise<boolean> => {
     try {
       await db.discardedIds.put({ id: paper.id, discardedAt: Date.now() });
+      const aimId = getActiveAimId();
+      await dropFromLeftover(aimId, paper.id);
+      const aim = await getAim(aimId);
+      showAimLeftover(aim?.leftoverCards ?? papersRef.current.filter((card) => card.id !== paper.id));
+      return true;
     } catch (err) {
       console.error('Failed to discard paper:', err);
+      return false;
     }
   };
 
@@ -126,6 +181,8 @@ export function App() {
       await db.savedPapers.delete(paperId);
       await db.notes.where('paperId').equals(paperId).delete();
       await db.pdfCache.delete(paperId);
+      await db.contentCache.delete(paperId);
+      await db.readingPlaces.delete(paperId);
     } catch (err) {
       console.error('Failed to remove paper:', err);
     }
@@ -150,38 +207,57 @@ export function App() {
       await db.discardedIds.clear();
       await db.pdfCache.clear();
       await db.contentCache.clear();
+      await db.aims.clear();
+      await db.readingPlaces.clear();
+      await db.journalTombstones.clear();
       await db.sources.clear();
       await db.sources.bulkAdd(DEFAULT_SOURCES);
-      loadFeed();
+      localStorage.removeItem('active_aim_id');
+      const aim = await ensureGlobalRecent();
+      setActiveAimId(aim.id);
+      setIsLoading(true);
+      await replaceActiveStack();
     }
   };
 
   const handleSelectChannel = async (sourceId: string) => {
+    await parkCurrentLeftover();
+    const aimId = aimIdFromSourceId(sourceId);
+    setActiveAimId(aimId);
     await db.transaction('rw', db.sources, async () => {
       const all = await db.sources.toArray();
       for (const s of all) {
         await db.sources.update(s.id, { enabled: s.id === sourceId });
       }
     });
-    loadFeed();
+    const aim = await restoreAim(aimId);
+    if (!aim || shouldFirstFetch(aim)) {
+      setIsLoading(true);
+      await replaceActiveStack();
+      return;
+    }
+    showAimLeftover(aim.leftoverCards);
   };
 
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
 
   const handleSelectRabbitHole = async (topicId: string, topicName: string) => {
     setIsExplorerOpen(false);
-    
-    const sourceId = `openalex-topic-${topicId}`;
-    
+    await parkCurrentLeftover();
+
+    const aim = await ensureTopicAim(topicId, topicName);
+    setActiveAimId(aim.id);
+
+    const sourceId = sourceIdFromAimId(aim.id);
     await db.transaction('rw', db.sources, async () => {
       const all = await db.sources.toArray();
       for (const s of all) {
         await db.sources.update(s.id, { enabled: false });
       }
-      
+
       const exists = await db.sources.get(sourceId);
       if (exists) {
-        await db.sources.update(sourceId, { enabled: true });
+        await db.sources.update(sourceId, { enabled: true, name: topicName });
       } else {
         await db.sources.put({
           id: sourceId,
@@ -193,8 +269,14 @@ export function App() {
         });
       }
     });
-    
-    loadFeed();
+
+    const restored = await restoreAim(aim.id);
+    if (!restored || shouldFirstFetch(restored)) {
+      setIsLoading(true);
+      await replaceActiveStack();
+      return;
+    }
+    showAimLeftover(restored.leftoverCards);
   };
 
   return (
@@ -206,7 +288,7 @@ export function App() {
         onOpenSettings={() => setIsSettingsOpen(true)}
         onRefreshFeed={() => {
           setIsRefreshing(true);
-          loadFeed();
+          void replaceActiveStack();
         }}
         isRefreshing={isRefreshing}
         savedCount={savedPapers.length}
@@ -275,7 +357,10 @@ export function App() {
                   papers={papers}
                   onSave={handleSavePaper}
                   onDiscard={handleDiscardPaper}
-                  onRefresh={loadFeed}
+                  onRefresh={() => {
+                    setIsRefreshing(true);
+                    void replaceActiveStack();
+                  }}
                 />
               </div>
             )}
@@ -309,7 +394,7 @@ export function App() {
           onResetDatabase={handleResetDatabase}
           onClose={() => {
             setIsSettingsOpen(false);
-            loadFeed();
+            void restoreActiveAim();
           }}
         />
       )}

@@ -6,8 +6,8 @@ import { X, Heart, Sparkles, Keyboard, CheckCircle2, RotateCcw } from 'lucide-re
 
 interface SwipeDeckProps {
   papers: PaperCard[];
-  onSave: (paper: PaperCard) => void;
-  onDiscard: (paper: PaperCard) => void;
+  onSave: (paper: PaperCard) => void | Promise<boolean>;
+  onDiscard: (paper: PaperCard) => void | Promise<boolean>;
   onRefresh: () => void;
 }
 
@@ -21,11 +21,13 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
   const opacitySave = useTransform(x, [50, 150], [0, 1]);
   const opacityDiscard = useTransform(x, [-150, -50], [1, 0]);
 
+  const papersKey = papers.map((paper) => paper.id).join('|');
+
   useEffect(() => {
     setDeck(papers);
     x.set(0);
     setSwipedDir(null);
-  }, [papers]);
+  }, [papersKey]);
 
   const activeCard = deck[0];
 
@@ -34,18 +36,24 @@ export function SwipeDeck({ papers, onSave, onDiscard, onRefresh }: SwipeDeckPro
     setSwipedDir(null);
   }, [activeCard?.id]);
 
-  const handleSwipeRight = () => {
+  const handleSwipeRight = async () => {
     if (!activeCard) return;
     setSwipedDir('right');
-    onSave(activeCard);
-    setDeck((prev) => prev.slice(1));
+    const ok = await onSave(activeCard);
+    if (ok === false) {
+      setSwipedDir(null);
+      x.set(0);
+    }
   };
 
-  const handleSwipeLeft = () => {
+  const handleSwipeLeft = async () => {
     if (!activeCard) return;
     setSwipedDir('left');
-    onDiscard(activeCard);
-    setDeck((prev) => prev.slice(1));
+    const ok = await onDiscard(activeCard);
+    if (ok === false) {
+      setSwipedDir(null);
+      x.set(0);
+    }
   };
 
   // Keyboard shortcut listener
