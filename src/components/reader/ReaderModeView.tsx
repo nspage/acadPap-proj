@@ -12,8 +12,9 @@ import { db } from '../../lib/db';
 import { readingPlaceAttr, restorePlace } from '../../lib/reading-place';
 import { fetchStructuredContent } from '../../services/openalex-content';
 import { liftUnreadableStamp, stampUnreadable } from '../../services/aim-store';
-import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink, AlertCircle, TrendingUp, Globe, Landmark, Link, AlertTriangle, RotateCcw } from 'lucide-react';
+import { Type, Sparkles, BookOpen, Loader2, Calendar, User, ExternalLink, TrendingUp, Globe, Landmark, Link, AlertTriangle } from 'lucide-react';
 import { NoInAppTextMark } from '../common/NoInAppTextMark';
+import { SpokenNotice, SPOKEN } from '../common/SpokenNotice';
 
 type BodyState =
   | { status: 'loading' }
@@ -70,14 +71,17 @@ export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: Reader
           return;
         }
         if (result.kind === 'quota') {
+          console.error('Content fetch quota:', paper.id);
           setBodyState({ status: 'quota' });
           return;
         }
         if (result.message === 'aborted') return;
+        console.error('Broken read:', result.message);
         setBodyState({ status: 'broken' });
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return;
+        console.error('Broken read:', err);
         setBodyState({ status: 'broken' });
       });
 
@@ -289,27 +293,15 @@ export function ReaderModeView({ paper, onTextSelected, onPaperUpdated }: Reader
             )}
           </div>
         ) : bodyState.status === 'quota' ? (
-          <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
-            <div className="flex items-center justify-center gap-2 text-amber-400 text-sm font-semibold">
-              <AlertCircle className="w-4 h-4" />
-              <span>Cap is used, come back later.</span>
-            </div>
-          </div>
+          <SpokenNotice
+            message={SPOKEN.quota}
+            onRetry={() => setRetryToken((n) => n + 1)}
+          />
         ) : bodyState.status === 'broken' ? (
-          <div className="p-6 bg-slate-950/40 border border-slate-800 rounded-2xl text-center space-y-3">
-            <div className="flex items-center justify-center gap-2 text-amber-400 text-sm font-semibold">
-              <AlertCircle className="w-4 h-4" />
-              <span>Couldn't get the text</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setRetryToken((n) => n + 1)}
-              className="inline-flex items-center space-x-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md transition-colors"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Retry</span>
-            </button>
-          </div>
+          <SpokenNotice
+            message={SPOKEN.brokenRead}
+            onRetry={() => setRetryToken((n) => n + 1)}
+          />
         ) : (
           <div className="space-y-8 font-serif">
             {bodyState.content.sections.map((section, idx) => (

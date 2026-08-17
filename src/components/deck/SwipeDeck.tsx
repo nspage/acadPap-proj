@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { PaperCard, PileStatus } from '../../types';
 import { PaperCardItem } from './PaperCardItem';
-import { SpokenNotice } from '../common/SpokenNotice';
+import { SpokenNotice, SPOKEN } from '../common/SpokenNotice';
 import { X, Heart, Keyboard, CheckCircle2, RotateCcw } from 'lucide-react';
 
 interface SwipeDeckProps {
@@ -18,6 +18,7 @@ interface SwipeDeckProps {
 export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRefresh, onRetryPile }: SwipeDeckProps) {
   const [deck, setDeck] = useState<PaperCard[]>([]);
   const [swipedDir, setSwipedDir] = useState<'left' | 'right' | null>(null);
+  const [actionNotice, setActionNotice] = useState<'save' | 'discard' | null>(null);
   const lastDragX = useRef(0);
   const x = useMotionValue(0);
 
@@ -51,7 +52,10 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
     if (ok === false) {
       setSwipedDir(null);
       x.set(0);
+      setActionNotice('save');
+      return;
     }
+    setActionNotice(null);
   };
 
   const handleSwipeLeft = async () => {
@@ -61,7 +65,10 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
     if (ok === false) {
       setSwipedDir(null);
       x.set(0);
+      setActionNotice('discard');
+      return;
     }
+    setActionNotice(null);
   };
 
   // Keyboard shortcut listener
@@ -89,11 +96,7 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
     if (pileStatus !== 'caught_up') {
       return (
         <SpokenNotice
-          message={
-            pileStatus === 'quota'
-              ? "Cap is used, come back later."
-              : "Couldn't load papers."
-          }
+          message={pileStatus === 'quota' ? SPOKEN.quota : SPOKEN.pileFailed}
           onRetry={onRetryPile}
         />
       );
@@ -123,12 +126,20 @@ export function SwipeDeck({ papers, pileStatus, onSave, onDiscard, onOpen, onRef
     <div className="flex flex-col items-center w-full max-w-2xl mx-auto px-4 py-4">
       {(pileStatus === 'failed' || pileStatus === 'quota') && (
         <SpokenNotice
-          message={
-            pileStatus === 'quota'
-              ? "Cap is used, come back later."
-              : "Couldn't load papers."
-          }
+          message={pileStatus === 'quota' ? SPOKEN.quota : SPOKEN.pileFailed}
           onRetry={onRetryPile}
+        />
+      )}
+      {actionNotice === 'save' && (
+        <SpokenNotice
+          message={SPOKEN.saveFailed}
+          onRetry={() => { void handleSwipeRight(); }}
+        />
+      )}
+      {actionNotice === 'discard' && (
+        <SpokenNotice
+          message={SPOKEN.discardFailed}
+          onRetry={() => { void handleSwipeLeft(); }}
         />
       )}
       {/* Card Stack Container */}

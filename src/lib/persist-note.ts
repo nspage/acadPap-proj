@@ -36,7 +36,8 @@ export async function persistNoteNow(note: PaperNote, paper: PaperCard): Promise
 
     scheduleJournalPush();
     return { ok: true, impliedSave };
-  } catch {
+  } catch (err) {
+    console.error('Failed to save the note:', err);
     return { ok: false };
   }
 }

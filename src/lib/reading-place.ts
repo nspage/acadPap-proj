@@ -134,7 +134,8 @@ export async function persistPlaceNow(
     });
     scheduleJournalPush();
     return true;
-  } catch {
+  } catch (err) {
+    console.error('Failed to persist reading place:', err);
     markSyncFailedOnLeave();
     return false;
   }

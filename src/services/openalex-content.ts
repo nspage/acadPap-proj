@@ -40,18 +40,20 @@ export async function fetchStructuredContent(
     try {
       res = await fetch(url, { signal: controller.signal });
     } catch (err) {
-      return {
-        ok: false,
-        kind: 'transient',
-        message: controller.signal.aborted
-          ? (opts?.signal?.aborted ? 'aborted' : 'timeout')
-          : err instanceof Error ? err.message : 'network',
-      };
+      const message = controller.signal.aborted
+        ? (opts?.signal?.aborted ? 'aborted' : 'timeout')
+        : err instanceof Error ? err.message : 'network';
+      if (message !== 'aborted') console.error('OpenAlex Content transient:', message);
+      return { ok: false, kind: 'transient', message };
     }
 
     if (res.status === 404) return { ok: false, kind: 'not_found', status: 404 };
-    if (res.status === 429) return { ok: false, kind: 'quota', status: 429 };
+    if (res.status === 429) {
+      console.error('OpenAlex Content quota:', workId);
+      return { ok: false, kind: 'quota', status: 429 };
+    }
     if (!res.ok) {
+      console.error('OpenAlex Content transient:', res.status, workId);
       return { ok: false, kind: 'transient', status: res.status, message: `HTTP ${res.status}` };
     }
 
@@ -64,13 +66,11 @@ export async function fetchStructuredContent(
       }
       xmlText = await new Response(decompressedStream).text();
     } catch (err) {
-      return {
-        ok: false,
-        kind: 'transient',
-        message: controller.signal.aborted
-          ? (opts?.signal?.aborted ? 'aborted' : 'timeout')
-          : 'decompress failed',
-      };
+      const message = controller.signal.aborted
+        ? (opts?.signal?.aborted ? 'aborted' : 'timeout')
+        : 'decompress failed';
+      if (message !== 'aborted') console.error('OpenAlex Content transient:', message, err);
+      return { ok: false, kind: 'transient', message };
     }
 
     if (!xmlText || xmlText.length < 100) {
