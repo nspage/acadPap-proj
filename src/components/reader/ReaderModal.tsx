@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { PaperCard, PaperNote, TextSelectionContext, UnreadableStampPatch, publisherUrl, showsNoInAppText } from '../../types';
 import { NoInAppTextMark } from '../common/NoInAppTextMark';
 import { SpokenNotice } from '../common/SpokenNotice';
 import { ReaderModeView } from './ReaderModeView';
 import { db } from '../../lib/db';
 import { persistNoteNow } from '../../lib/persist-note';
+import { persistPlaceNow } from '../../lib/reading-place';
 import { fetchDictionaryDefinition, fetchContextualExplanation } from '../../services/explainer';
 import { X, Sparkles, Book, Check, ExternalLink, Quote, Lightbulb, FileText } from 'lucide-react';
 
@@ -29,13 +30,27 @@ interface ReaderModalProps {
   onImpliedSave: (paper: PaperCard) => Promise<void>;
 }
 
-export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated, onImpliedSave }: ReaderModalProps) {
+export interface ReaderModalHandle {
+  persistPlaceNow: () => Promise<boolean>;
+}
+
+export const ReaderModal = forwardRef<ReaderModalHandle, ReaderModalProps>(function ReaderModal(
+  { paper, apiKey, onClose, onPaperUpdated, onImpliedSave },
+  ref,
+) {
   const [activeTab, setActiveTab] = useState<'reader' | 'notes'>('reader');
 
   const [note, setNote] = useState<PaperNote>(() => emptyNote(paper?.id || ''));
   const noteRef = useRef(note);
   noteRef.current = note;
   const persistChain = useRef(Promise.resolve());
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const paperRef = useRef(paper);
+  paperRef.current = paper;
+
+  useImperativeHandle(ref, () => ({
+    persistPlaceNow: () => persistPlaceNow(scrollRef.current, paperRef.current?.id ?? null),
+  }), []);
 
   const [selectedContext, setSelectedContext] = useState<TextSelectionContext | null>(null);
   const [definition, setDefinition] = useState<string | null>(null);
@@ -192,16 +207,18 @@ export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated, onImpliedS
 
         {/* Main Body */}
         <div className="flex-1 overflow-hidden relative flex">
-          {activeTab === 'reader' ? (
-            <div className="w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col items-center">
-              <ReaderModeView
-                paper={paper}
-                onTextSelected={handleTextSelected}
-                onPaperUpdated={onPaperUpdated}
-              />
-            </div>
-          ) : (
-            <div className="w-full h-full p-6 overflow-y-auto space-y-6">
+          <div
+            ref={scrollRef}
+            className="w-full h-full p-4 sm:p-6 overflow-y-auto flex flex-col items-center"
+          >
+            <ReaderModeView
+              paper={paper}
+              onTextSelected={handleTextSelected}
+              onPaperUpdated={onPaperUpdated}
+            />
+          </div>
+          {activeTab === 'notes' && (
+            <div className="absolute inset-0 z-10 bg-slate-900 p-6 overflow-y-auto space-y-6">
               {/* Takeaways */}
               <div className="bg-slate-950/50 p-4 rounded-2xl border border-slate-800">
                 <label className="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
@@ -349,4 +366,4 @@ export function ReaderModal({ paper, apiKey, onClose, onPaperUpdated, onImpliedS
       </div>
     </div>
   );
-}
+});

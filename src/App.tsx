@@ -21,12 +21,17 @@ import {
   shouldFirstFetch,
 } from './services/aim-store';
 import { Header } from './components/common/Header';
+import { SpokenNotice } from './components/common/SpokenNotice';
 import { SwipeDeck } from './components/deck/SwipeDeck';
 import { JournalView } from './components/journal/JournalView';
-import { ReaderModal } from './components/reader/ReaderModal';
+import { ReaderModal, type ReaderModalHandle } from './components/reader/ReaderModal';
 import { SettingsModal } from './components/settings/SettingsModal';
 import { RabbitHoleExplorer } from './components/deck/RabbitHoleExplorer';
 import { AimSteer } from './components/deck/AimSteer';
+import {
+  clearSyncFailedOnLeave,
+  didSyncFailOnLeave,
+} from './lib/reading-place';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Loader2 } from 'lucide-react';
 
@@ -38,6 +43,7 @@ export function App() {
   const pileGen = useRef(0);
   const lastPileAction = useRef<PileAction>('replace');
   const pendingFlipPool = useRef<Pool | null>(null);
+  const readerRef = useRef<ReaderModalHandle>(null);
 
   const [activeTab, setActiveTab] = useState<'discover' | 'journal'>('discover');
   const [papers, setPapers] = useState<PaperCard[]>([]);
@@ -48,6 +54,7 @@ export function App() {
   const [selectedReaderPaper, setSelectedReaderPaper] = useState<PaperCard | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isExplorerOpen, setIsExplorerOpen] = useState(false);
+  const [leaveSyncFailed, setLeaveSyncFailed] = useState(() => didSyncFailOnLeave());
   const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
   const papersRef = useRef<PaperCard[]>([]);
   papersRef.current = papers;
@@ -238,6 +245,28 @@ export function App() {
     setIsRefreshing(false);
   };
 
+  const persistOpenPlace = async (): Promise<boolean> => {
+    if (!readerRef.current) return true;
+    return readerRef.current.persistPlaceNow();
+  };
+
+  const closeReader = () => {
+    void (async () => {
+      await persistOpenPlace();
+      setSelectedReaderPaper(null);
+      if (didSyncFailOnLeave()) setLeaveSyncFailed(true);
+    })();
+  };
+
+  const handleRetryLeaveSync = async () => {
+    if (readerRef.current) {
+      const ok = await readerRef.current.persistPlaceNow();
+      if (!ok) return;
+    }
+    clearSyncFailedOnLeave();
+    setLeaveSyncFailed(false);
+  };
+
   const handleRetryPile = () => {
     if (lastPileAction.current === 'refresh') {
       void refreshAim();
@@ -250,6 +279,27 @@ export function App() {
     }
     void replaceActiveStack();
   };
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        void persistOpenPlace();
+        return;
+      }
+      if (document.visibilityState === 'visible' && didSyncFailOnLeave()) {
+        setLeaveSyncFailed(true);
+      }
+    };
+    const onPageHide = () => {
+      void persistOpenPlace();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -368,6 +418,8 @@ export function App() {
       await db.sources.clear();
       await db.sources.bulkAdd(DEFAULT_SOURCES);
       localStorage.removeItem('active_aim_id');
+      clearSyncFailedOnLeave();
+      setLeaveSyncFailed(false);
       const aim = await ensureGlobalRecent();
       switchActiveAim(aim.id);
       setIsLoading(true);
@@ -389,6 +441,12 @@ export function App() {
       />
 
       <main className="flex-1 flex flex-col items-center justify-start p-4 w-full">
+        {leaveSyncFailed && (
+          <SpokenNotice
+            message="Couldn't save your place."
+            onRetry={() => { void handleRetryLeaveSync(); }}
+          />
+        )}
         {activeTab === 'discover' ? (
           <div className="w-full flex flex-col items-center h-full max-w-3xl mx-auto">
             <AimSteer
@@ -431,9 +489,10 @@ export function App() {
 
       {selectedReaderPaper && (
         <ReaderModal
+          ref={readerRef}
           paper={selectedReaderPaper}
           apiKey={apiKey}
-          onClose={() => setSelectedReaderPaper(null)}
+          onClose={closeReader}
           onPaperUpdated={handlePaperUpdated}
           onImpliedSave={handleImpliedSave}
         />
